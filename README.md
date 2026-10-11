@@ -9,7 +9,7 @@ App de barrio. Piloto de comercio en General Lacy y alrededores (Arganzuela, Mad
 - **Ofertas (tendero):** oferta rápida con plantilla, descuento, cantidad y hora, con vista previa.
 - **Entrada** con código por correo, sin contraseñas.
 
-Sin clave de Supabase la app arranca en **modo demostración** con una frutería de ejemplo, para enseñarla en la calle.
+Con `EXPO_PUBLIC_DEMO=1` la app arranca en **modo demostración** con una frutería de ejemplo, para enseñarla en la calle sin tocar datos reales.
 
 ## Reglas que garantiza la base de datos
 
@@ -26,7 +26,7 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 ## Puesta en marcha
 
 1. `npm install`
-2. Copia `.env.example` como `.env` y pega la clave "anon public".
+2. La conexión a Supabase ya está en `src/config.ts`.
 3. En Supabase > SQL Editor, ejecuta `supabase/migrations/0001_piloto_comercio.sql`.
 4. En Supabase > Authentication, activa la entrada por correo con código (OTP).
 5. `npx expo start` y abre el código QR con Expo Go en el móvil.
