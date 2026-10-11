@@ -7,7 +7,7 @@ App de barrio. Piloto de comercio en General Lacy y alrededores (Arganzuela, Mad
 - **Mi calle (vecino):** ofertas del día, "Resérvamelo", tus reservas y cancelarlas, código para verificarte en una tienda.
 - **Mi tienda (tendero):** reservas de hoy (aceptar, sin stock, recogida, no vino), contador de 10 reservas gratis, confirmar a un vecino con su código. Las reservas nuevas llegan al momento.
 - **Ofertas (tendero):** oferta rápida con plantilla, descuento, cantidad y hora, con vista previa.
-- **Entrada** con código por correo, sin contraseñas.
+- **Entrada** con correo y contraseña. Volveremos al código por correo cuando haya servidor de correo propio (SMTP).
 
 Con `EXPO_PUBLIC_DEMO=1` la app arranca en **modo demostración** con una frutería de ejemplo, para enseñarla en la calle sin tocar datos reales.
 
@@ -28,8 +28,8 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 1. `npm install`
 2. La conexión a Supabase ya está en `src/config.ts`.
 3. En Supabase > SQL Editor, ejecuta `supabase/migrations/0001_piloto_comercio.sql`.
-4. En Supabase > Authentication, activa la entrada por correo con código (OTP).
-5. `npx expo start` y abre el código QR con Expo Go en el móvil.
+4. Para pruebas: Supabase > Authentication > Sign In / Providers > Email, desactiva "Confirm email".
+5. Android: `npx eas-cli@latest build -p android --profile preview` genera un APK que se instala directamente, sin Google Play.
 
 ## Pendiente
 
