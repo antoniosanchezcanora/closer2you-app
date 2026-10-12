@@ -3,6 +3,12 @@ export type PriorPriceBasis = 'minimo_30_dias' | 'proximo_a_caducar';
 
 export type ReservationStatus = 'nueva' | 'lista' | 'recogida' | 'rechazada' | 'cancelada' | 'no_show';
 
+export type Me = {
+  name: string;
+  verified: boolean;
+  verifiedBy: string | null; // nombre de la tienda que te verificó
+};
+
 export type Shop = {
   id: string;
   name: string;
@@ -60,6 +66,9 @@ export type NewOffer = {
 // una de demostración en memoria y otra contra Supabase.
 export interface Repo {
   mode: 'demo' | 'live';
+  // perfil: null si aún no ha dicho cómo se llama
+  me(): Promise<Me | null>;
+  createProfile(name: string): Promise<void>;
   // vecino
   liveOffers(): Promise<Offer[]>;
   reserve(offerId: string, qty: number, note?: string): Promise<void>;

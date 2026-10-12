@@ -1,77 +1,130 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { colors, radius } from '../theme';
+import { colorFor, colors, radius, shadow } from '../theme';
+
+type Tone = 'primary' | 'dark' | 'ghost' | 'soft' | 'blue' | 'red' | 'wine';
+
+const TONES: Record<Tone, { bg: string; fg: string; border?: string }> = {
+  primary: { bg: colors.green, fg: '#FFFFFF' },
+  dark: { bg: colors.ink, fg: '#FFFFFF' },
+  ghost: { bg: colors.card, fg: colors.ink, border: '#D5D9DE' },
+  soft: { bg: '#EEEFF1', fg: colors.ink },
+  blue: { bg: colors.blue, fg: '#FFFFFF' },
+  red: { bg: colors.red, fg: '#FFFFFF' },
+  wine: { bg: colors.wine, fg: '#FFFFFF' },
+};
 
 type BtnProps = {
   label: string;
   onPress: () => void;
-  tone?: 'yellow' | 'mint' | 'white' | 'ghost';
+  tone?: Tone;
+  small?: boolean;
   busy?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
 };
 
-export function Button({ label, onPress, tone = 'yellow', busy, disabled, style }: BtnProps) {
-  const bg = tone === 'yellow' ? colors.yellow : tone === 'mint' ? colors.mint : colors.card;
-  const border = tone === 'ghost' ? colors.line : colors.ink;
+export function Button({ label, onPress, tone = 'primary', small, busy, disabled, style }: BtnProps) {
+  const t = TONES[tone];
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: !!(disabled || busy) }}
       onPress={onPress}
       disabled={disabled || busy}
-      style={({ pressed }) => [s.btn, { backgroundColor: bg, borderColor: border, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 }, style]}
+      style={({ pressed }) => [
+        small ? s.btnSmall : s.btn,
+        { backgroundColor: t.bg, opacity: disabled ? 0.45 : pressed ? 0.85 : 1 },
+        t.border ? { borderWidth: 1.5, borderColor: t.border } : null,
+        style,
+      ]}
     >
-      {busy ? <ActivityIndicator color={colors.ink} /> : <Text style={[s.btnText, tone === 'ghost' && { color: colors.muted, fontWeight: '700' }]}>{label}</Text>}
+      {busy ? <ActivityIndicator color={t.fg} /> : <Text style={[small ? s.btnTextSmall : s.btnText, { color: t.fg }]}>{label}</Text>}
     </Pressable>
   );
 }
 
-export function Card({ children, style, strong }: { children: React.ReactNode; style?: ViewStyle; strong?: boolean }) {
-  return <View style={[s.card, { borderColor: strong ? colors.ink : colors.line }, style]}>{children}</View>;
+export function Card({ children, style, tint }: { children: React.ReactNode; style?: ViewStyle; tint?: string }) {
+  return <View style={[s.card, tint ? { backgroundColor: tint, boxShadow: 'none' } : null, style]}>{children}</View>;
 }
 
-export function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+export function Chip({ label, on, onPress, color = colors.ink }: { label: string; on: boolean; onPress: () => void; color?: string }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={[s.chip, on ? s.chipOn : null]}>
-      <Text style={[s.chipText, on ? { color: colors.bg } : null]}>{label}</Text>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={[s.chip, on ? { backgroundColor: color, borderColor: color } : null]}>
+      <Text style={[s.chipText, on ? { color: '#FFFFFF' } : null]}>{label}</Text>
     </Pressable>
   );
 }
 
-export function Tag({ label, bg, color }: { label: string; bg: string; color?: string }) {
+// Selector de dos o tres opciones, como el de los ajustes del teléfono.
+export function Segment<K extends string>({ items, value, onChange }: { items: { id: K; label: string }[]; value: K; onChange: (k: K) => void }) {
   return (
-    <View style={[s.tag, { backgroundColor: bg }]}>
-      <Text style={[s.tagText, color ? { color } : null]}>{label}</Text>
+    <View style={s.segment} accessibilityRole="tablist">
+      {items.map((it) => (
+        <Pressable key={it.id} accessibilityRole="tab" accessibilityState={{ selected: value === it.id }} onPress={() => onChange(it.id)} style={[s.segItem, value === it.id && s.segOn]}>
+          <Text style={[s.segText, value === it.id && { color: colors.ink }]}>{it.label}</Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
 
-export function Avatar({ name, bg }: { name: string; bg: string }) {
+export function Badge({ label, color = colors.red, soft }: { label: string; color?: string; soft?: string }) {
   return (
-    <View style={[s.avatar, { backgroundColor: bg }]} accessibilityElementsHidden importantForAccessibility="no">
-      <Text style={s.avatarText}>{name.slice(0, 1).toUpperCase()}</Text>
+    <View style={[s.badge, { backgroundColor: soft ?? color }]}>
+      <Text style={[s.badgeText, { color: soft ? color : '#FFFFFF' }]}>{label}</Text>
+    </View>
+  );
+}
+
+export function Initial({ name, size = 40, square }: { name: string; size?: number; square?: boolean }) {
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+      style={{ width: size, height: size, borderRadius: square ? size * 0.28 : size / 2, backgroundColor: colorFor(name), alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: size * 0.42 }}>{name.trim().slice(0, 1).toUpperCase()}</Text>
+    </View>
+  );
+}
+
+export function Label({ children }: { children: string }) {
+  return <Text style={s.label}>{children.toUpperCase()}</Text>;
+}
+
+export function Note({ children, tint = colors.card, color = colors.muted }: { children: React.ReactNode; tint?: string; color?: string }) {
+  return (
+    <View style={[s.note, { backgroundColor: tint }]}>
+      {typeof children === 'string' ? <Text style={[T.small, { color, fontSize: 14, lineHeight: 20 }]}>{children}</Text> : children}
     </View>
   );
 }
 
 export const T = StyleSheet.create({
-  h1: { fontSize: 24, fontWeight: '800', color: colors.ink },
-  h2: { fontSize: 16, fontWeight: '800', color: colors.ink },
-  body: { fontSize: 15, color: colors.ink, lineHeight: 21 },
+  title: { fontSize: 30, fontWeight: '700', color: colors.ink, letterSpacing: -0.6 },
+  kicker: { fontSize: 13, fontWeight: '600', color: colors.faint, letterSpacing: 0.4 },
+  h1: { fontSize: 24, fontWeight: '700', color: colors.ink, letterSpacing: -0.4 },
+  h2: { fontSize: 17, fontWeight: '700', color: colors.ink },
+  body: { fontSize: 16, color: colors.ink, lineHeight: 22 },
   small: { fontSize: 13, color: colors.muted, lineHeight: 18 },
-  strong: { fontSize: 15, fontWeight: '800', color: colors.ink },
-}) as Record<'h1' | 'h2' | 'body' | 'small' | 'strong', TextStyle>;
+  strong: { fontSize: 16, fontWeight: '600', color: colors.ink },
+}) as Record<'title' | 'kicker' | 'h1' | 'h2' | 'body' | 'small' | 'strong', TextStyle>;
 
 const s = StyleSheet.create({
-  btn: { minHeight: 48, paddingHorizontal: 16, borderRadius: radius.sm, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  btnText: { fontSize: 15, fontWeight: '800', color: colors.ink },
-  card: { backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 2, padding: 12, gap: 8 },
-  chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 2, borderColor: colors.ink, backgroundColor: colors.card, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink },
-  chipText: { fontSize: 14, fontWeight: '800', color: colors.ink },
-  tag: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill },
-  tagText: { fontSize: 11, fontWeight: '800', color: colors.ink },
-  avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 14, fontWeight: '800', color: colors.ink },
+  btn: { minHeight: 50, paddingHorizontal: 18, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  btnSmall: { minHeight: 40, paddingHorizontal: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  btnText: { fontSize: 16, fontWeight: '600' },
+  btnTextSmall: { fontSize: 14, fontWeight: '600' },
+  card: { backgroundColor: colors.card, borderRadius: radius.md, padding: 14, gap: 8, ...shadow },
+  chip: { minHeight: 38, paddingHorizontal: 13, borderRadius: radius.pill, borderWidth: 1, borderColor: '#D5D9DE', backgroundColor: colors.card, justifyContent: 'center' },
+  chipText: { fontSize: 14, fontWeight: '600', color: colors.ink },
+  segment: { flexDirection: 'row', padding: 3, borderRadius: 10, backgroundColor: colors.segment },
+  segItem: { flex: 1, minHeight: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  segOn: { backgroundColor: colors.card, boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.12)' },
+  segText: { fontSize: 14, fontWeight: '600', color: colors.muted },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, alignSelf: 'flex-start' },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  label: { fontSize: 13, fontWeight: '600', color: colors.faint, letterSpacing: 0.5, marginTop: 6 },
+  note: { borderRadius: 14, padding: 12 },
 });

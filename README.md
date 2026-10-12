@@ -9,7 +9,8 @@ App de barrio. Piloto de comercio en General Lacy y alrededores (Arganzuela, Mad
 - **Mi calle (vecino):** ofertas del día, "Resérvamelo", tus reservas y cancelarlas, código para verificarte en una tienda.
 - **Mi tienda (tendero):** reservas de hoy (aceptar, sin stock, recogida, no vino), contador de 10 reservas gratis, confirmar a un vecino con su código. Las reservas nuevas llegan al momento.
 - **Ofertas (tendero):** oferta rápida de tipo rebaja, lote o novedad, con plantilla, cantidad y hora, y vista previa.
-- **Entrada** con correo y contraseña. Volveremos al código por correo cuando haya servidor de correo propio (SMTP).
+- **Entrada** con correo y contraseña. Volveremos al código por correo cuando haya servidor de correo propio (SMTP). Si la cuenta se confirma por correo, la app pide el nombre la primera vez que entras.
+- **Diseño realista** (el elegido en el lienzo): fondo gris claro, tarjetas blancas, verde de tienda. Las pestañas de tienda solo aparecen a quien tiene una tienda dada de alta.
 
 Con `EXPO_PUBLIC_DEMO=1` la app arranca en **modo demostración** con una frutería de ejemplo, para enseñarla en la calle sin tocar datos reales.
 
@@ -33,7 +34,7 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 
 1. `npm install`
 2. La conexión a Supabase ya está en `src/config.ts`.
-3. En Supabase > SQL Editor, ejecuta en orden los archivos de `supabase/migrations/`.
+3. En Supabase > SQL Editor, ejecuta **en orden y una sola vez** los archivos de `supabase/migrations/`: `0001`, `0002` y `0003`. Cada uno: New query, pegar el contenido, Run. Sin `0002` y `0003` la app falla al publicar ofertas.
 4. Para pruebas: Supabase > Authentication > Sign In / Providers > Email, desactiva "Confirm email".
 5. Android: `npx eas-cli@latest build -p android --profile preview` genera un APK que se instala directamente, sin Google Play.
 
@@ -42,4 +43,7 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 - Verificación por factura y por DNI (el DNI, solo tras revisión legal y sin guardar la foto).
 - Elección de cuota a partir de la reserva 11.
 - Avisos push al tendero con la app cerrada, y al vecino como máximo 1 aviso al día por tienda.
-- La calle ilustrada y el resto de pilares (conocer y cuidarnos).
+- Fotos de fachada en la ficha de cada tienda (las hace Stoop en el alta).
+- Recogida en tienda o entrega propia; restaurantes con menú del día; «Hoy en tu calle».
+- Fase 2: vecinos, Vuelvo a casa, cuidado y profesionales verificados (con revisión de seguridad antes de abrirla a vecinos reales).
+- `npm run lint` y `npx tsc --noEmit` deben pasar antes de cada versión.

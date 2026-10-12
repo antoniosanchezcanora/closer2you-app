@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Button, Chip, T } from '../components/ui';
+import { Badge, Button, Card, Chip, Label, Note, T } from '../components/ui';
 import { repo } from '../lib/repo';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from '../lib/types';
 import type { OfferKind, PriorPriceBasis } from '../lib/types';
@@ -127,19 +127,19 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
   return (
     <ScrollView contentContainerStyle={st.wrap}>
       <View>
-        <Text style={T.h1}>Oferta rápida</Text>
-        <Text style={T.small}>Diez segundos y tu ventana se enciende en la calle.</Text>
+        <Text style={T.kicker}>LISTA EN 10 SEGUNDOS</Text>
+        <Text style={T.title}>Nueva oferta</Text>
       </View>
 
-      {blocked && !published && <Text style={st.blocked}>{blocked}</Text>}
+      {blocked && !published && <Note tint={colors.goldSoft} color={colors.ink}>{blocked}</Note>}
 
-      <Text style={T.h2}>1. Qué tipo de oferta</Text>
+      <Label>Tipo de oferta</Label>
       <View style={st.row}>
-        {KINDS.map((k) => <Chip key={k.id} label={k.label} on={kind === k.id} onPress={() => pickKind(k.id)} />)}
+        {KINDS.map((k) => <Chip key={k.id} label={k.label} on={kind === k.id} onPress={() => pickKind(k.id)} color={colors.green} />)}
       </View>
       <Text style={T.small}>{kindInfo.help}</Text>
 
-      <Text style={T.h2}>2. Qué sacas hoy</Text>
+      <Label>Qué sacas hoy</Label>
       <View style={st.wrapRow}>
         {TEMPLATES[kind].map((t, i) => <Chip key={t.title} label={t.title} on={tpl === i} onPress={() => pick(kind, i)} />)}
       </View>
@@ -157,9 +157,9 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
 
       {isRebaja && (
         <>
-          <Text style={T.h2}>3. Cuánto lo bajas</Text>
+          <Label>Cuánto lo bajas</Label>
           <View style={st.row}>
-            {DISCOUNTS.map((d) => <Chip key={d} label={`-${d}%`} on={pct === d} onPress={() => { setPct(d); touch(); }} />)}
+            {DISCOUNTS.map((d) => <Chip key={d} label={`-${d}%`} on={pct === d} onPress={() => { setPct(d); touch(); }} color={colors.red} />)}
           </View>
           <View style={st.legal}>
             <Text style={T.strong}>¿De dónde sale el precio de antes?</Text>
@@ -176,30 +176,32 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
         <Text style={T.small}>{unit}</Text>
       </View>
 
-      <Text style={T.h2}>{isRebaja ? '4.' : '3.'} Cuántas y hasta cuándo</Text>
+      <Label>Cuántas y hasta cuándo</Label>
       <View style={st.row}>
-        <Button label="-" tone="white" onPress={() => { setQty(Math.max(1, qty - 1)); touch(); }} />
+        <Button small label="−" tone="soft" onPress={() => { setQty(Math.max(1, qty - 1)); touch(); }} />
         <Text style={st.qty} accessibilityLiveRegion="polite">{qty}</Text>
-        <Button label="+" tone="white" onPress={() => { setQty(Math.min(50, qty + 1)); touch(); }} />
+        <Button small label="+" tone="soft" onPress={() => { setQty(Math.min(50, qty + 1)); touch(); }} />
         <View style={{ flex: 1 }} />
         <Chip label="Las 14:00" on={until === '14'} onPress={() => { setUntil('14'); touch(); }} />
         <Chip label="El cierre" on={until === 'cierre'} onPress={() => { setUntil('cierre'); touch(); }} />
       </View>
 
-      <Text style={T.h2}>Así lo ven tus vecinos</Text>
-      <View style={st.preview}>
-        <View style={[st.window, published && st.windowOn]} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={st.previewKicker}>{kindInfo.label}{isRebaja ? ` -${pct}%` : ''} · {until === '14' ? 'hasta las 14:00' : 'hasta el cierre'}</Text>
-          <Text style={st.previewTitle}>{title || 'Tu oferta'}: {eur(finalCents)}</Text>
-          <Text style={st.previewSub}>{isRebaja ? `Antes ${eur(priceCents)} · ` : ''}{unit} · Quedan {qty}</Text>
+      <Label>Así lo ven tus vecinos</Label>
+      <Card>
+        <Badge label={isRebaja ? `-${pct}%` : kindInfo.label} color={isRebaja ? colors.red : kind === 'lote' ? colors.gold : colors.green} soft={isRebaja ? undefined : kind === 'lote' ? colors.goldSoft : colors.greenSoft} />
+        <Text style={T.strong}>{title || 'Tu oferta'}</Text>
+        <View style={st.row}>
+          <Text style={st.priceSm}>{eur(finalCents)}</Text>
+          {isRebaja && <Text style={[T.small, { textDecorationLine: 'line-through' }]}>{eur(priceCents)}</Text>}
+          <Text style={T.small}>{unit}</Text>
         </View>
-      </View>
+        <Text style={T.small}>Quedan {qty} · {until === '14' ? 'hasta las 14:00' : 'hasta el cierre'}</Text>
+      </Card>
 
       {published ? (
         <>
-          <Text style={st.ok}>Publicada. Tu ventana ya brilla en la calle. Las reservas te llegan a Hoy.</Text>
-          <Button label="Ver reservas" tone="mint" onPress={onDone} />
+          <Note tint={colors.greenSoft} color="#1F4A37">Publicada. Los vecinos de tu calle ya la ven. Las reservas te llegan a Mi tienda al momento.</Note>
+          <Button label="Ver reservas" onPress={onDone} />
         </>
       ) : (
         <Button label="Publicar oferta" busy={busy} disabled={!!blocked} onPress={publish} />
@@ -219,22 +221,15 @@ function Radio({ on, label, onPress }: { on: boolean; label: string; onPress: ()
 }
 
 const st = StyleSheet.create({
-  wrap: { padding: 16, gap: 12 },
+  wrap: { padding: 16, gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  input: { minHeight: 48, borderRadius: 12, borderWidth: 2, borderColor: colors.ink, backgroundColor: colors.card, paddingHorizontal: 12, fontSize: 16, fontWeight: '600', color: colors.ink },
-  price: { fontSize: 26, fontWeight: '800', color: colors.ink },
-  qty: { minWidth: 32, textAlign: 'center', fontSize: 20, fontWeight: '800', color: colors.ink },
-  legal: { backgroundColor: colors.lilacSoft, borderRadius: 18, padding: 12, gap: 8 },
+  input: { minHeight: 48, borderRadius: 12, backgroundColor: colors.card, paddingHorizontal: 12, fontSize: 16, color: colors.ink, borderWidth: 1, borderColor: '#D5D9DE' },
+  price: { fontSize: 26, fontWeight: '700', color: colors.ink },
+  priceSm: { fontSize: 19, fontWeight: '700', color: colors.ink },
+  qty: { minWidth: 32, textAlign: 'center', fontSize: 20, fontWeight: '700', color: colors.ink },
+  legal: { backgroundColor: colors.blueSoft, borderRadius: 16, padding: 12, gap: 8 },
   radio: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
-  dot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.ink, backgroundColor: colors.card },
-  dotOn: { backgroundColor: colors.ink },
-  preview: { flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: colors.night, borderRadius: 18, padding: 12 },
-  window: { width: 46, height: 58, borderRadius: 6, borderWidth: 3, borderColor: colors.ink, backgroundColor: '#3A3160' },
-  windowOn: { backgroundColor: colors.yellow, shadowColor: colors.yellow, shadowOpacity: 0.9, shadowRadius: 12, elevation: 8 },
-  previewKicker: { fontSize: 12, fontWeight: '700', color: colors.yellow },
-  previewTitle: { fontSize: 15, fontWeight: '800', color: '#FFF6E5' },
-  previewSub: { fontSize: 13, color: '#CFC6EA' },
-  blocked: { backgroundColor: colors.cream, borderRadius: 18, borderWidth: 2, borderColor: colors.ink, padding: 12, fontSize: 15, fontWeight: '700', color: colors.ink },
-  ok: { backgroundColor: colors.mintSoft, borderRadius: 18, borderWidth: 2, borderColor: colors.ink, padding: 12, fontSize: 15, fontWeight: '700', color: colors.ink },
+  dot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#B8BDC4', backgroundColor: colors.card },
+  dotOn: { borderColor: colors.green, backgroundColor: colors.green },
 });

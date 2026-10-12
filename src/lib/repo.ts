@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { NewOffer, Offer, Repo, Reservation, ReservationStatus, Shop } from './types';
+import type { Me, NewOffer, Offer, Repo, Reservation, ReservationStatus, Shop } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 const isLive = (o: Offer) => o.active !== false && o.qty_left > 0 && new Date(o.until).getTime() > Date.now();
@@ -12,11 +12,11 @@ const isLive = (o: Offer) => o.active !== false && o.qty_left > 0 && new Date(o.
 function demoRepo(): Repo {
   const now = Date.now();
   const at = (min: number) => new Date(now + min * 60000).toISOString();
-  const shop: Shop = { id: 's1', name: 'Frutería Lacy', category: 'fruteria', street: 'General Lacy', hours: 'Hasta las 20:30', free_reservations_used: 6 };
+  const shop: Shop = { id: 's1', name: 'Frutería Carmen', category: 'fruteria', street: 'General Lacy', hours: 'Abierta hasta las 21:00', free_reservations_used: 6 };
   const offers: Offer[] = [
     { id: 'o1', shop_id: 's1', shop_name: shop.name, kind: 'rebaja', title: 'Manzanas reineta', unit: 'el kilo', price_cents: 168, old_price_cents: 240, qty_left: 8, until: at(240), created_at: at(-200), active: true },
-    { id: 'o2', shop_id: 's3', shop_name: 'Mercado La Huerta', kind: 'lote', title: 'Caja sorpresa de fruta', unit: 'unos 3 kg', price_cents: 350, old_price_cents: null, qty_left: 4, until: at(240), created_at: at(-1500), active: true },
-    { id: 'o3', shop_id: 's2', shop_name: 'Horno de la esquina', kind: 'novedad', title: 'Pan de masa madre, recién salido', unit: 'la hogaza', price_cents: 380, old_price_cents: null, qty_left: 10, until: at(120), created_at: at(-30), active: true },
+    { id: 'o2', shop_id: 's3', shop_name: 'Mercado de la esquina', kind: 'lote', title: 'Caja sorpresa de fruta', unit: 'unos 3 kg', price_cents: 350, old_price_cents: null, qty_left: 4, until: at(240), created_at: at(-1500), active: true },
+    { id: 'o3', shop_id: 's2', shop_name: 'Panadería La Espiga', kind: 'novedad', title: 'Pan de masa madre, recién salido', unit: 'la hogaza', price_cents: 380, old_price_cents: null, qty_left: 10, until: at(120), created_at: at(-30), active: true },
   ];
   const res: Reservation[] = [
     { id: 'r1', offer_id: 'o1', shop_id: 's1', offer_title: 'Manzanas reineta', neighbour_name: 'Marta', qty: 1, pickup_at: at(30), note: null, status: 'nueva', created_at: at(-20) },
@@ -26,11 +26,14 @@ function demoRepo(): Repo {
   ];
   const mine: Reservation[] = [];
   const muted = new Set<string>();
+  const me: Me = { name: 'Toni', verified: true, verifiedBy: shop.name };
   const wait = () => new Promise((r) => setTimeout(r, 150));
   const find = (id: string) => res.find((r) => r.id === id) || mine.find((r) => r.id === id);
 
   return {
     mode: 'demo',
+    async me() { await wait(); return { ...me }; },
+    async createProfile(name) { await wait(); me.name = name; },
     async liveOffers() { await wait(); return offers.filter((o) => isLive(o) && !muted.has(o.shop_id)).map((o) => ({ ...o })); },
     async muteShop(shopId) { await wait(); muted.add(shopId); },
     async reserve(offerId, qty, note) {
@@ -100,6 +103,15 @@ function liveRepo(): Repo {
 
   return {
     mode: 'live',
+    async me() {
+      const rows = ok(await sb.from('profiles').select('display_name, verified_at, shops:verified_by_shop(name)').eq('id', await uid()).limit(1));
+      const p = (rows as any[])[0];
+      if (!p) return null;
+      return { name: p.display_name, verified: !!p.verified_at, verifiedBy: p.shops?.name ?? null };
+    },
+    async createProfile(name) {
+      ok(await sb.from('profiles').upsert({ id: await uid(), display_name: name.trim(), street: 'General Lacy' }, { onConflict: 'id', ignoreDuplicates: true }));
+    },
     async liveOffers() {
       const me = await uid();
       const [rows, mutedRows] = await Promise.all([
