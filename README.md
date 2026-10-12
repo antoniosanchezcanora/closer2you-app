@@ -23,13 +23,16 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 - El stock se descuenta al reservar y se devuelve si se cancela o no hay.
 - La tienda solo puede seguir el orden nueva → lista → recogida (o sin stock / no vino); el vecino solo puede cancelar.
 - El contador de reservas gratis solo sube con reservas recogidas y el tendero no puede tocarlo.
+- Cada tienda publica como máximo 2 ofertas al día y tiene como máximo 2 activas. Las ofertas no se borran, se retiran (así no se puede saltar el límite).
+- Nunca se fijan ni limitan precios: cada tienda decide el suyo. La calle no ordena por precio ni compara tiendas, y cada tienda ocupa una sola tarjeta.
+- El vecino puede silenciar una tienda.
 - Cada uno ve solo sus reservas; la tienda solo las suyas y el nombre de quien reserva. Nunca se guarda portal ni piso.
 
 ## Puesta en marcha
 
 1. `npm install`
 2. La conexión a Supabase ya está en `src/config.ts`.
-3. En Supabase > SQL Editor, ejecuta `supabase/migrations/0001_piloto_comercio.sql`.
+3. En Supabase > SQL Editor, ejecuta en orden los archivos de `supabase/migrations/`.
 4. Para pruebas: Supabase > Authentication > Sign In / Providers > Email, desactiva "Confirm email".
 5. Android: `npx eas-cli@latest build -p android --profile preview` genera un APK que se instala directamente, sin Google Play.
 
@@ -37,5 +40,5 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 
 - Verificación por factura y por DNI (el DNI, solo tras revisión legal y sin guardar la foto).
 - Elección de cuota a partir de la reserva 11.
-- Avisos push al tendero con la app cerrada.
+- Avisos push al tendero con la app cerrada, y al vecino como máximo 1 aviso al día por tienda.
 - La calle ilustrada y el resto de pilares (conocer y cuidarnos).
