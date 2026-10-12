@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, T } from '../components/ui';
+import { Button, Card, T, Tag } from '../components/ui';
 import { repo } from '../lib/repo';
 import type { Offer, Reservation } from '../lib/types';
 import { colors, eur, hhmm } from '../theme';
@@ -80,10 +80,13 @@ export default function VecinoHoy() {
           {g.offers.map((o) => (
             <View key={o.id} style={st.offer}>
               <View style={{ flex: 1, gap: 2 }}>
+                <View style={st.row}>
+                  <Tag label={o.kind === 'lote' ? 'Lote' : o.kind === 'novedad' ? 'Novedad' : o.old_price_cents ? `Rebaja -${Math.round(100 - (o.price_cents * 100) / o.old_price_cents)}%` : 'Oferta'} bg={o.kind === 'lote' ? colors.peachSoft : o.kind === 'novedad' ? colors.mintSoft : colors.pink} />
+                </View>
                 <Text style={T.strong}>{o.title}</Text>
                 <View style={st.row}>
                   <Text style={st.price}>{eur(o.price_cents)}</Text>
-                  {!!o.old_price_cents && <Text style={[T.small, { textDecorationLine: 'line-through' }]}>{eur(o.old_price_cents)}</Text>}
+                  {o.kind !== 'lote' && o.kind !== 'novedad' && !!o.old_price_cents && <Text style={[T.small, { textDecorationLine: 'line-through' }]}>{eur(o.old_price_cents)}</Text>}
                   <Text style={T.small}>{o.unit}</Text>
                 </View>
                 <Text style={T.small}>Quedan {o.qty_left} · hasta las {hhmm(o.until)}</Text>

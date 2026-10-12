@@ -8,7 +8,7 @@ App de barrio. Piloto de comercio en General Lacy y alrededores (Arganzuela, Mad
 
 - **Mi calle (vecino):** ofertas del día, "Resérvamelo", tus reservas y cancelarlas, código para verificarte en una tienda.
 - **Mi tienda (tendero):** reservas de hoy (aceptar, sin stock, recogida, no vino), contador de 10 reservas gratis, confirmar a un vecino con su código. Las reservas nuevas llegan al momento.
-- **Ofertas (tendero):** oferta rápida con plantilla, descuento, cantidad y hora, con vista previa.
+- **Ofertas (tendero):** oferta rápida de tipo rebaja, lote o novedad, con plantilla, cantidad y hora, y vista previa.
 - **Entrada** con correo y contraseña. Volveremos al código por correo cuando haya servidor de correo propio (SMTP).
 
 Con `EXPO_PUBLIC_DEMO=1` la app arranca en **modo demostración** con una frutería de ejemplo, para enseñarla en la calle sin tocar datos reales.
@@ -25,6 +25,7 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 - El contador de reservas gratis solo sube con reservas recogidas y el tendero no puede tocarlo.
 - Cada tienda publica como máximo 2 ofertas al día y tiene como máximo 2 activas. Las ofertas no se borran, se retiran (así no se puede saltar el límite).
 - Nunca se fijan ni limitan precios: cada tienda decide el suyo. La calle no ordena por precio ni compara tiendas, y cada tienda ocupa una sola tarjeta.
+- Tres tipos de oferta: rebaja (precio de antes y de ahora; el tendero confirma que el de antes es el mínimo de 30 días o que el producto está a punto de caducar), lote y novedad (precio cerrado, sin tachar). Siempre se ve el precio final.
 - El vecino puede silenciar una tienda.
 - Cada uno ve solo sus reservas; la tienda solo las suyas y el nombre de quien reserva. Nunca se guarda portal ni piso.
 

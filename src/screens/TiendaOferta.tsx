@@ -1,16 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button, Chip, T } from '../components/ui';
 import { repo } from '../lib/repo';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from '../lib/types';
+import type { OfferKind, PriorPriceBasis } from '../lib/types';
 import { colors, eur } from '../theme';
 
-// Plantillas para que la oferta salga en diez segundos. El tendero puede cambiar el texto.
-const TEMPLATES = [
-  { title: 'Manzanas reineta', unit: 'el kilo', price: 240 },
-  { title: 'Caja sorpresa de fruta', unit: 'unos 3 kg', price: 700 },
-  { title: 'Plátanos para bizcocho', unit: 'el kilo', price: 190 },
+// Tres tipos de oferta: así las tiendas compiten por lo que tienen, no solo por el precio.
+const KINDS: { id: OfferKind; label: string; help: string }[] = [
+  { id: 'rebaja', label: 'Rebaja', help: 'Un producto más barato hoy. Se ve el precio de antes y el de ahora.' },
+  { id: 'lote', label: 'Lote', help: 'Una caja o lote a un precio cerrado. No se compara con nada.' },
+  { id: 'novedad', label: 'Novedad', help: 'Lo que ha llegado hoy, con su precio de siempre.' },
 ];
+
+// Plantillas por tipo para que salga en diez segundos. El tendero puede cambiar el texto.
+const TEMPLATES: Record<OfferKind, { title: string; unit: string; price: number }[]> = {
+  rebaja: [
+    { title: 'Manzanas reineta', unit: 'el kilo', price: 240 },
+    { title: 'Plátanos para bizcocho', unit: 'el kilo', price: 190 },
+    { title: 'Tomates para salsa', unit: 'el kilo', price: 280 },
+  ],
+  lote: [
+    { title: 'Caja sorpresa de fruta', unit: 'unos 3 kg', price: 350 },
+    { title: 'Lote de verdura para caldo', unit: 'para 4 personas', price: 300 },
+  ],
+  novedad: [
+    { title: 'Han llegado nísperos', unit: 'el kilo', price: 390 },
+    { title: 'Primeras mandarinas', unit: 'el kilo', price: 260 },
+  ],
+};
 const DISCOUNTS = [20, 30, 50];
 
 function untilIso(kind: '14' | 'cierre') {
@@ -21,12 +39,17 @@ function untilIso(kind: '14' | 'cierre') {
   return d.toISOString();
 }
 
+const toCents = (v: string) => Math.round(parseFloat(v.replace(',', '.')) * 100) || 0;
+const toText = (c: number) => String(c / 100).replace('.', ',');
+
 export default function TiendaOferta({ onDone }: { onDone: () => void }) {
+  const [kind, setKind] = useState<OfferKind>('rebaja');
   const [tpl, setTpl] = useState(0);
-  const [title, setTitle] = useState(TEMPLATES[0].title);
-  const [unit, setUnit] = useState(TEMPLATES[0].unit);
-  const [price, setPrice] = useState(String(TEMPLATES[0].price / 100).replace('.', ','));
+  const [title, setTitle] = useState(TEMPLATES.rebaja[0].title);
+  const [unit, setUnit] = useState(TEMPLATES.rebaja[0].unit);
+  const [price, setPrice] = useState(toText(TEMPLATES.rebaja[0].price));
   const [pct, setPct] = useState(30);
+  const [basis, setBasis] = useState<PriorPriceBasis | null>(null);
   const [qty, setQty] = useState(8);
   const [until, setUntil] = useState<'14' | 'cierre'>('cierre');
   const [busy, setBusy] = useState(false);
@@ -51,25 +74,46 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
     })();
   }, [published]);
 
-  const oldCents = Math.round(parseFloat(price.replace(',', '.')) * 100) || 0;
-  const newCents = Math.round((oldCents * (100 - pct)) / 100);
+  const touch = () => setPublished(false);
+  const priceCents = toCents(price);
+  const isRebaja = kind === 'rebaja';
+  const finalCents = isRebaja ? Math.round((priceCents * (100 - pct)) / 100) : priceCents;
 
-  const pick = (i: number) => {
+  const pickKind = (k: OfferKind) => {
+    setKind(k);
+    pick(k, 0);
+  };
+  const pick = (k: OfferKind, i: number) => {
+    const t = TEMPLATES[k][i];
     setTpl(i);
-    setTitle(TEMPLATES[i].title);
-    setUnit(TEMPLATES[i].unit);
-    setPrice(String(TEMPLATES[i].price / 100).replace('.', ','));
-    setPublished(false);
+    setTitle(t.title);
+    setUnit(t.unit);
+    setPrice(toText(t.price));
+    setBasis(null);
+    touch();
   };
 
   const publish = async () => {
-    if (title.trim().length < 2 || oldCents <= 0) {
-      Alert.alert('Falta algo', 'Pon qué ofreces y su precio normal.');
+    if (title.trim().length < 2 || priceCents <= 0) {
+      Alert.alert('Falta algo', isRebaja ? 'Pon qué ofreces y su precio de antes.' : 'Pon qué ofreces y su precio.');
+      return;
+    }
+    if (isRebaja && !basis) {
+      Alert.alert('Un último paso', 'Confirma de dónde sale el precio de antes. La ley pide que sea el más bajo de los últimos 30 días, salvo productos a punto de caducar.');
       return;
     }
     setBusy(true);
     try {
-      await repo.publishOffer({ title: title.trim(), unit: unit.trim() || 'unidad', price_cents: newCents, old_price_cents: oldCents, qty_left: qty, until: untilIso(until) });
+      await repo.publishOffer({
+        kind,
+        prior_price_basis: isRebaja ? basis : null,
+        title: title.trim(),
+        unit: unit.trim() || 'unidad',
+        price_cents: finalCents,
+        old_price_cents: isRebaja ? priceCents : null,
+        qty_left: qty,
+        until: untilIso(until),
+      });
       setPublished(true);
     } catch (e: any) {
       Alert.alert('No se ha podido publicar', e.message);
@@ -77,6 +121,8 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
       setBusy(false);
     }
   };
+
+  const kindInfo = KINDS.find((k) => k.id === kind)!;
 
   return (
     <ScrollView contentContainerStyle={st.wrap}>
@@ -87,43 +133,66 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
 
       {blocked && !published && <Text style={st.blocked}>{blocked}</Text>}
 
-      <Text style={T.h2}>1. Qué quieres sacar hoy</Text>
-      <View style={st.wrapRow}>
-        {TEMPLATES.map((t, i) => <Chip key={t.title} label={t.title} on={tpl === i} onPress={() => pick(i)} />)}
-      </View>
-      <TextInput value={title} onChangeText={(v) => { setTitle(v); setPublished(false); }} accessibilityLabel="Producto" style={st.input} maxLength={60} />
+      <Text style={T.h2}>1. Qué tipo de oferta</Text>
       <View style={st.row}>
-        <TextInput value={price} onChangeText={(v) => { setPrice(v); setPublished(false); }} keyboardType="decimal-pad" accessibilityLabel="Precio normal en euros" style={[st.input, { flex: 1 }]} />
-        <TextInput value={unit} onChangeText={(v) => { setUnit(v); setPublished(false); }} accessibilityLabel="Unidad" style={[st.input, { flex: 1 }]} />
+        {KINDS.map((k) => <Chip key={k.id} label={k.label} on={kind === k.id} onPress={() => pickKind(k.id)} />)}
+      </View>
+      <Text style={T.small}>{kindInfo.help}</Text>
+
+      <Text style={T.h2}>2. Qué sacas hoy</Text>
+      <View style={st.wrapRow}>
+        {TEMPLATES[kind].map((t, i) => <Chip key={t.title} label={t.title} on={tpl === i} onPress={() => pick(kind, i)} />)}
+      </View>
+      <TextInput value={title} onChangeText={(v) => { setTitle(v); touch(); }} accessibilityLabel="Producto" style={st.input} maxLength={60} />
+      <View style={st.row}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={T.small}>{isRebaja ? 'Precio de antes (€)' : 'Precio (€)'}</Text>
+          <TextInput value={price} onChangeText={(v) => { setPrice(v); touch(); }} keyboardType="decimal-pad" accessibilityLabel={isRebaja ? 'Precio de antes en euros' : 'Precio en euros'} style={st.input} />
+        </View>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={T.small}>{kind === 'lote' ? 'Qué lleva' : 'Unidad'}</Text>
+          <TextInput value={unit} onChangeText={(v) => { setUnit(v); touch(); }} accessibilityLabel={kind === 'lote' ? 'Contenido del lote' : 'Unidad'} style={st.input} />
+        </View>
       </View>
 
-      <Text style={T.h2}>2. Cuánto lo bajas</Text>
+      {isRebaja && (
+        <>
+          <Text style={T.h2}>3. Cuánto lo bajas</Text>
+          <View style={st.row}>
+            {DISCOUNTS.map((d) => <Chip key={d} label={`-${d}%`} on={pct === d} onPress={() => { setPct(d); touch(); }} />)}
+          </View>
+          <View style={st.legal}>
+            <Text style={T.strong}>¿De dónde sale el precio de antes?</Text>
+            <Radio on={basis === 'minimo_30_dias'} label="Es el más bajo que he tenido en los últimos 30 días" onPress={() => { setBasis('minimo_30_dias'); touch(); }} />
+            <Radio on={basis === 'proximo_a_caducar'} label="El producto está a punto de caducar o de pasarse" onPress={() => { setBasis('proximo_a_caducar'); touch(); }} />
+            <Text style={T.small}>La ley de rebajas no deja inflar el precio de antes. Si no estás seguro, publícalo como Novedad o como Lote.</Text>
+          </View>
+        </>
+      )}
+
       <View style={st.row}>
-        {DISCOUNTS.map((d) => <Chip key={d} label={`-${d}%`} on={pct === d} onPress={() => { setPct(d); setPublished(false); }} />)}
-      </View>
-      <View style={st.row}>
-        <Text style={[T.small, { textDecorationLine: 'line-through' }]}>{eur(oldCents)}</Text>
-        <Text style={st.price}>{eur(newCents)}</Text>
+        {isRebaja && <Text style={[T.small, { textDecorationLine: 'line-through' }]}>{eur(priceCents)}</Text>}
+        <Text style={st.price}>{eur(finalCents)}</Text>
         <Text style={T.small}>{unit}</Text>
       </View>
 
-      <Text style={T.h2}>3. Cuántas y hasta cuándo</Text>
+      <Text style={T.h2}>{isRebaja ? '4.' : '3.'} Cuántas y hasta cuándo</Text>
       <View style={st.row}>
-        <Button label="-" tone="white" onPress={() => { setQty(Math.max(1, qty - 1)); setPublished(false); }} />
+        <Button label="-" tone="white" onPress={() => { setQty(Math.max(1, qty - 1)); touch(); }} />
         <Text style={st.qty} accessibilityLiveRegion="polite">{qty}</Text>
-        <Button label="+" tone="white" onPress={() => { setQty(Math.min(50, qty + 1)); setPublished(false); }} />
+        <Button label="+" tone="white" onPress={() => { setQty(Math.min(50, qty + 1)); touch(); }} />
         <View style={{ flex: 1 }} />
-        <Chip label="Las 14:00" on={until === '14'} onPress={() => { setUntil('14'); setPublished(false); }} />
-        <Chip label="El cierre" on={until === 'cierre'} onPress={() => { setUntil('cierre'); setPublished(false); }} />
+        <Chip label="Las 14:00" on={until === '14'} onPress={() => { setUntil('14'); touch(); }} />
+        <Chip label="El cierre" on={until === 'cierre'} onPress={() => { setUntil('cierre'); touch(); }} />
       </View>
 
       <Text style={T.h2}>Así lo ven tus vecinos</Text>
       <View style={st.preview}>
         <View style={[st.window, published && st.windowOn]} />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={st.previewKicker}>{until === '14' ? 'Hasta las 14:00' : 'Hasta el cierre'}</Text>
-          <Text style={st.previewTitle}>{title || 'Tu oferta'} a {eur(newCents)}</Text>
-          <Text style={st.previewSub}>Quedan {qty} · Reservar y recoger en tienda</Text>
+          <Text style={st.previewKicker}>{kindInfo.label}{isRebaja ? ` -${pct}%` : ''} · {until === '14' ? 'hasta las 14:00' : 'hasta el cierre'}</Text>
+          <Text style={st.previewTitle}>{title || 'Tu oferta'}: {eur(finalCents)}</Text>
+          <Text style={st.previewSub}>{isRebaja ? `Antes ${eur(priceCents)} · ` : ''}{unit} · Quedan {qty}</Text>
         </View>
       </View>
 
@@ -140,6 +209,15 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
   );
 }
 
+function Radio({ on, label, onPress }: { on: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={onPress} style={st.radio}>
+      <View style={[st.dot, on && st.dotOn]} />
+      <Text style={[T.body, { flex: 1 }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const st = StyleSheet.create({
   wrap: { padding: 16, gap: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -147,6 +225,10 @@ const st = StyleSheet.create({
   input: { minHeight: 48, borderRadius: 12, borderWidth: 2, borderColor: colors.ink, backgroundColor: colors.card, paddingHorizontal: 12, fontSize: 16, fontWeight: '600', color: colors.ink },
   price: { fontSize: 26, fontWeight: '800', color: colors.ink },
   qty: { minWidth: 32, textAlign: 'center', fontSize: 20, fontWeight: '800', color: colors.ink },
+  legal: { backgroundColor: colors.lilacSoft, borderRadius: 18, padding: 12, gap: 8 },
+  radio: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  dot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.ink, backgroundColor: colors.card },
+  dotOn: { backgroundColor: colors.ink },
   preview: { flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: colors.night, borderRadius: 18, padding: 12 },
   window: { width: 46, height: 58, borderRadius: 6, borderWidth: 3, borderColor: colors.ink, backgroundColor: '#3A3160' },
   windowOn: { backgroundColor: colors.yellow, shadowColor: colors.yellow, shadowOpacity: 0.9, shadowRadius: 12, elevation: 8 },

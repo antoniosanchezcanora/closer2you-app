@@ -1,3 +1,6 @@
+export type OfferKind = 'rebaja' | 'lote' | 'novedad';
+export type PriorPriceBasis = 'minimo_30_dias' | 'proximo_a_caducar';
+
 export type ReservationStatus = 'nueva' | 'lista' | 'recogida' | 'rechazada' | 'cancelada' | 'no_show';
 
 export type Shop = {
@@ -21,6 +24,7 @@ export type Offer = {
   until: string;
   created_at?: string;
   active?: boolean;
+  kind?: OfferKind;
 };
 
 // Límites de publicación por tienda (los garantiza la base de datos).
@@ -42,6 +46,8 @@ export type Reservation = {
 };
 
 export type NewOffer = {
+  kind: OfferKind;
+  prior_price_basis: PriorPriceBasis | null; // solo rebajas
   title: string;
   unit: string;
   price_cents: number;

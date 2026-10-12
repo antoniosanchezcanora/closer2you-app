@@ -14,9 +14,9 @@ function demoRepo(): Repo {
   const at = (min: number) => new Date(now + min * 60000).toISOString();
   const shop: Shop = { id: 's1', name: 'Frutería Lacy', category: 'fruteria', street: 'General Lacy', hours: 'Hasta las 20:30', free_reservations_used: 6 };
   const offers: Offer[] = [
-    { id: 'o1', shop_id: 's1', shop_name: shop.name, title: 'Manzanas reineta', unit: 'el kilo', price_cents: 168, old_price_cents: 240, qty_left: 8, until: at(240), created_at: at(-200), active: true },
-    { id: 'o2', shop_id: 's3', shop_name: 'Mercado La Huerta', title: 'Caja sorpresa de fruta', unit: 'unos 3 kg', price_cents: 350, old_price_cents: 700, qty_left: 4, until: at(240), created_at: at(-1500), active: true },
-    { id: 'o3', shop_id: 's2', shop_name: 'Horno de la esquina', title: 'Pan del día', unit: 'la barra', price_cents: 60, old_price_cents: 120, qty_left: 10, until: at(120), created_at: at(-30), active: true },
+    { id: 'o1', shop_id: 's1', shop_name: shop.name, kind: 'rebaja', title: 'Manzanas reineta', unit: 'el kilo', price_cents: 168, old_price_cents: 240, qty_left: 8, until: at(240), created_at: at(-200), active: true },
+    { id: 'o2', shop_id: 's3', shop_name: 'Mercado La Huerta', kind: 'lote', title: 'Caja sorpresa de fruta', unit: 'unos 3 kg', price_cents: 350, old_price_cents: null, qty_left: 4, until: at(240), created_at: at(-1500), active: true },
+    { id: 'o3', shop_id: 's2', shop_name: 'Horno de la esquina', kind: 'novedad', title: 'Pan de masa madre, recién salido', unit: 'la hogaza', price_cents: 380, old_price_cents: null, qty_left: 10, until: at(120), created_at: at(-30), active: true },
   ];
   const res: Reservation[] = [
     { id: 'r1', offer_id: 'o1', shop_id: 's1', offer_title: 'Manzanas reineta', neighbour_name: 'Marta', qty: 1, pickup_at: at(30), note: null, status: 'nueva', created_at: at(-20) },
@@ -60,7 +60,8 @@ function demoRepo(): Repo {
       const mineAll = offers.filter((o) => o.shop_id === shop.id);
       if (mineAll.filter((o) => o.created_at && madridDay(o.created_at) === today).length >= MAX_OFERTAS_DIA) throw new Error('Hoy ya has publicado 2 ofertas. Mañana podrás publicar de nuevo.');
       if (mineAll.filter(isLive).length >= MAX_OFERTAS_ACTIVAS) throw new Error('Ya tienes 2 ofertas en la calle. Retira una o espera a que se agote para publicar otra.');
-      offers.unshift({ id: 'o' + Date.now(), shop_id: shop.id, shop_name: shop.name, created_at: new Date().toISOString(), active: true, ...n });
+      const { prior_price_basis, ...rest } = n;
+      offers.unshift({ id: 'o' + Date.now(), shop_id: shop.id, shop_name: shop.name, created_at: new Date().toISOString(), active: true, ...rest });
     },
     async shopOffersToday() {
       await wait();
@@ -102,7 +103,7 @@ function liveRepo(): Repo {
     async liveOffers() {
       const me = await uid();
       const [rows, mutedRows] = await Promise.all([
-        sb.from('offers').select('id, shop_id, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active, shops(name)').eq('active', true).gt('qty_left', 0).gt('until', new Date().toISOString()).order('created_at', { ascending: false }).then(ok),
+        sb.from('offers').select('id, shop_id, kind, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active, shops(name)').eq('active', true).gt('qty_left', 0).gt('until', new Date().toISOString()).order('created_at', { ascending: false }).then(ok),
         sb.from('muted_shops').select('shop_id').eq('neighbour_id', me).then(ok),
       ]);
       const muted = new Set((mutedRows as any[]).map((m) => m.shop_id));
@@ -142,7 +143,7 @@ function liveRepo(): Repo {
       const shop = shopCache ?? (await this.myShop());
       if (!shop) return [];
       const since = new Date(Date.now() - 36 * 3600 * 1000).toISOString();
-      const rows = ok(await sb.from('offers').select('id, shop_id, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active').eq('shop_id', shop.id).or(`created_at.gte.${since},and(active.eq.true,until.gt.${new Date().toISOString()})`).order('created_at', { ascending: false }));
+      const rows = ok(await sb.from('offers').select('id, shop_id, kind, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active').eq('shop_id', shop.id).or(`created_at.gte.${since},and(active.eq.true,until.gt.${new Date().toISOString()})`).order('created_at', { ascending: false }));
       const today = madridDay(new Date().toISOString());
       return (rows as Offer[]).filter((o) => (o.created_at && madridDay(o.created_at) === today) || isLive(o));
     },
