@@ -18,15 +18,14 @@ export default function Login() {
     setBusy(true);
     try {
       if (mode === 'crear') {
-        const { data, error } = await supabase!.auth.signUp({ email: email.trim(), password });
+        // El nombre viaja con la cuenta: la app crea el perfil al entrar (ver repo.me), así no hay carreras.
+        const { data, error } = await supabase!.auth.signUp({ email: email.trim(), password, options: { data: { display_name: name.trim() } } });
         if (error) throw error;
         if (!data.session) {
           Alert.alert('Revisa tu correo', 'Te hemos mandado un enlace para confirmar la cuenta. Después vuelve y entra.');
           setMode('entrar');
           return;
         }
-        // Si no hay que confirmar el correo, el perfil se crea ya. Si no, la app lo pide al entrar.
-        await supabase!.from('profiles').upsert({ id: data.user!.id, display_name: name.trim(), street: 'General Lacy' }, { onConflict: 'id', ignoreDuplicates: true });
       } else {
         const { error } = await supabase!.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;

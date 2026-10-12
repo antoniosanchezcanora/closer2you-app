@@ -84,4 +84,5 @@ export interface Repo {
   shopOffersToday(): Promise<Offer[]>; // publicadas hoy (activas o no) + activas de otros días
   withdrawOffer(offerId: string): Promise<void>;
   confirmNeighbour(code: string): Promise<string>;
+  signOut(): Promise<void>;
 }

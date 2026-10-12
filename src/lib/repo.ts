@@ -50,6 +50,7 @@ function demoRepo(): Repo {
     async requestShopCode() { await wait(); return 'LACY-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0'); },
     async myShop() { await wait(); return { ...shop }; },
     async shopReservations() { await wait(); return res.map((r) => ({ ...r })); },
+    async signOut() { await wait(); },
     async setStatus(id, status) {
       await wait();
       const r = res.find((x) => x.id === id);
@@ -106,7 +107,14 @@ function liveRepo(): Repo {
     async me() {
       const rows = ok(await sb.from('profiles').select('display_name, verified_at, shops:verified_by_shop(name)').eq('id', await uid()).limit(1));
       const p = (rows as any[])[0];
-      if (!p) return null;
+      if (!p) {
+        // Si dio su nombre al crear la cuenta, el perfil se crea aquí, también tras confirmar el correo.
+        const { data } = await sb.auth.getUser();
+        const name = String(data.user?.user_metadata?.display_name ?? '').trim();
+        if (!name) return null;
+        await this.createProfile(name);
+        return { name, verified: false, verifiedBy: null };
+      }
       return { name: p.display_name, verified: !!p.verified_at, verifiedBy: p.shops?.name ?? null };
     },
     async createProfile(name) {
@@ -140,7 +148,9 @@ function liveRepo(): Repo {
     async shopReservations() {
       const shop = shopCache ?? (await this.myShop());
       if (!shop) return [];
-      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const midnight = new Date();
+      midnight.setHours(0, 0, 0, 0);
+      const since = midnight.toISOString();
       const rows = ok(await sb.from('reservations').select(RES_COLS).eq('shop_id', shop.id).gte('created_at', since).order('created_at', { ascending: false }));
       return (rows as any[]).map(mapRes);
     },
@@ -160,6 +170,7 @@ function liveRepo(): Repo {
       return (rows as Offer[]).filter((o) => (o.created_at && madridDay(o.created_at) === today) || isLive(o));
     },
     async withdrawOffer(id) { ok(await sb.from('offers').update({ active: false }).eq('id', id)); },
+    async signOut() { shopCache = null; await sb.auth.signOut(); },
   };
 }
 

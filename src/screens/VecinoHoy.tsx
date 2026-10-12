@@ -90,6 +90,10 @@ export default function VecinoHoy({ me, onVerified }: { me: Me | null; onVerifie
           {verified && me?.verifiedBy ? <Badge label={`Verificado por ${me.verifiedBy}`} color={colors.green} soft={colors.greenSoft} /> : null}
         </View>
         {me ? <Initial name={me.name} size={44} /> : null}
+        <Button small label="Salir" tone="soft" onPress={() => Alert.alert('Salir', '¿Cerrar la sesión en este móvil?', [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', onPress: () => { repo.signOut().catch((e: any) => Alert.alert('Error', e.message)); } },
+        ])} />
       </View>
 
       {!verified && (

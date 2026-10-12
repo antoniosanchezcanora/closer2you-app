@@ -4,7 +4,7 @@ import { Badge, Button, Card, Chip, Label, Note, T } from '../components/ui';
 import { repo } from '../lib/repo';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from '../lib/types';
 import type { OfferKind, PriorPriceBasis } from '../lib/types';
-import { colors, eur } from '../theme';
+import { colors, eur, hhmm } from '../theme';
 
 // Tres tipos de oferta: así las tiendas compiten por lo que tienen, no solo por el precio.
 const KINDS: { id: OfferKind; label: string; help: string }[] = [
@@ -182,7 +182,7 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
         <Text style={st.qty} accessibilityLiveRegion="polite">{qty}</Text>
         <Button small label="+" tone="soft" onPress={() => { setQty(Math.min(50, qty + 1)); touch(); }} />
         <View style={{ flex: 1 }} />
-        <Chip label="Las 14:00" on={until === '14'} onPress={() => { setUntil('14'); touch(); }} />
+        {new Date().getHours() < 14 && <Chip label="Las 14:00" on={until === '14'} onPress={() => { setUntil('14'); touch(); }} />}
         <Chip label="El cierre" on={until === 'cierre'} onPress={() => { setUntil('cierre'); touch(); }} />
       </View>
 
@@ -195,7 +195,7 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
           {isRebaja && <Text style={[T.small, { textDecorationLine: 'line-through' }]}>{eur(priceCents)}</Text>}
           <Text style={T.small}>{unit}</Text>
         </View>
-        <Text style={T.small}>Quedan {qty} · {until === '14' ? 'hasta las 14:00' : 'hasta el cierre'}</Text>
+        <Text style={T.small}>Quedan {qty} · hasta las {hhmm(untilIso(until))}</Text>
       </Card>
 
       {published ? (
