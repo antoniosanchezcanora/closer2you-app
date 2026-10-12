@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Badge, Button, Card, Initial, Label, Note, T } from '../components/ui';
+import { Badge, Button, Card, Chip, Initial, Label, Note, T } from '../components/ui';
 import { repo } from '../lib/repo';
 import { supabase } from '../lib/supabase';
 import { MAX_OFERTAS_DIA } from '../lib/types';
-import type { Offer, Reservation, ReservationStatus, Shop } from '../lib/types';
+import type { Menu, MenuReservation, Offer, Reservation, ReservationStatus, Shop } from '../lib/types';
 import { colors, hhmm } from '../theme';
 
 const LABEL: Record<ReservationStatus, string> = {
@@ -19,8 +19,13 @@ const TONE: Record<ReservationStatus, { color: string; soft: string }> = {
   no_show: { color: colors.muted, soft: '#EEEFF1' },
 };
 
-export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
+const MENU_MODE = { aqui: 'Come aquí', llevar: 'Para llevar', entrega: 'A domicilio' } as const;
+
+export default function TiendaHoy({ onNewOffer, onSettings, onShopChange }: { onNewOffer: () => void; onSettings: () => void; onShopChange: () => void }) {
   const [shop, setShop] = useState<Shop | null>(null);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const [menuRows, setMenuRows] = useState<MenuReservation[]>([]);
   const [rows, setRows] = useState<Reservation[]>([]);
   const [myOffers, setMyOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,10 +37,16 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
 
   const load = useCallback(async () => {
     try {
-      const [s, r, o] = await Promise.all([repo.myShop(), repo.shopReservations(), repo.shopOffersToday()]);
+      const s = await repo.myShop();
+      const [all, r, o] = await Promise.all([repo.myShops(), repo.shopReservations(), repo.shopOffersToday()]);
       setShop(s);
+      setShops(all);
       setRows(r);
       setMyOffers(o);
+      if (s?.tipo === 'restaurante') {
+        const [m, mr] = await Promise.all([repo.myMenuToday(), repo.shopMenuReservations()]);
+        setMenu(m); setMenuRows(mr);
+      } else { setMenu(null); setMenuRows([]); }
       setNow(Date.now());
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
@@ -48,14 +59,17 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
     Promise.resolve().then(load);
     // En modo real, las reservas nuevas llegan al momento.
     if (!supabase) return;
-    const ch = supabase.channel('reservas').on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () => load()).subscribe();
+    const ch = supabase.channel('reservas')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_reservations' }, () => load())
+      .subscribe();
     return () => { supabase?.removeChannel(ch); };
   }, [load]);
 
-  const act = async (id: string, status: ReservationStatus) => {
+  const act = async (id: string, status: ReservationStatus, isMenu = false) => {
     setBusyId(id);
     try {
-      await repo.setStatus(id, status);
+      if (isMenu) await repo.setMenuStatus(id, status); else await repo.setStatus(id, status);
       await load();
     } catch (e: any) {
       Alert.alert('No se ha podido cambiar', e.message);
@@ -103,9 +117,62 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
         <Initial name={shop?.name ?? 'T'} size={48} square />
         <View style={{ flex: 1 }}>
           <Text style={T.h1}>{shop?.name ?? ' '}</Text>
-          <Text style={[T.small, { color: colors.green, fontWeight: '600' }]}>Modo tienda · {shop?.hours ?? 'hoy'}</Text>
+          <Text style={[T.small, { color: shop?.tipo === 'restaurante' ? colors.wine : colors.green, fontWeight: '600' }]}>{shop?.tipo === 'restaurante' ? 'Modo restaurante' : 'Modo tienda'} · {shop?.hours ?? 'hoy'}</Text>
         </View>
+        <Button small label="Ajustes" tone="soft" onPress={onSettings} />
       </View>
+      {shops.length > 1 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {shops.map((s) => <Chip key={s.id} label={s.name} on={s.id === shop?.id} onPress={() => { repo.selectShop(s.id); setLoading(true); load(); onShopChange(); }} />)}
+        </View>
+      )}
+
+      {shop?.tipo === 'restaurante' && (
+        <Card style={{ gap: 6 }}>
+          <Text style={T.strong}>Menú del día</Text>
+          {menu ? (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                <Text style={{ fontSize: 30, fontWeight: '700', color: colors.wine }}>{menu.qty_left}</Text>
+                <Text style={T.small}>quedan de {menu.qty_total}{menu.active ? ` · hasta las ${hhmm(menu.until)}` : ' · cerrado'}</Text>
+              </View>
+              {menuRows.length === 0 && <Text style={T.small}>Todavía no hay reservas de menú.</Text>}
+              {menuRows.map((r) => {
+                const done = !['nueva', 'lista'].includes(r.status);
+                return (
+                  <View key={r.id} style={[{ gap: 6, paddingTop: 8 }, st.sep, done && { opacity: 0.6 }]}>
+                    <View style={st.row}>
+                      <Initial name={r.neighbour_name} size={36} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={T.strong}>{r.neighbour_name} · {r.at_time}{r.qty > 1 ? ` · ${r.qty} menús` : ''}</Text>
+                        <Text style={T.small}>{MENU_MODE[r.mode]}{r.delivery_address ? ' · ' + r.delivery_address : ''}</Text>
+                      </View>
+                      <Badge label={LABEL[r.status]} color={TONE[r.status].color} soft={TONE[r.status].soft} />
+                    </View>
+                    {r.status === 'nueva' && (
+                      <View style={st.row}>
+                        <Button small label="Aceptar" tone="wine" busy={busyId === r.id} onPress={() => act(r.id, 'lista', true)} style={{ flex: 1 }} />
+                        <Button small label="No me quedan" tone="ghost" onPress={() => act(r.id, 'rechazada', true)} />
+                      </View>
+                    )}
+                    {r.status === 'lista' && (
+                      <View style={st.row}>
+                        <Button small label={r.mode === 'aqui' ? 'Ya ha venido' : 'Entregado'} tone="wine" busy={busyId === r.id} onPress={() => act(r.id, 'recogida', true)} style={{ flex: 1 }} />
+                        <Button small label="No vino" tone="ghost" onPress={() => act(r.id, 'no_show', true)} />
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </>
+          ) : (
+            <>
+              <Text style={T.small}>Hoy no has publicado menú.</Text>
+              <Button label="Publicar menú del día" tone="wine" onPress={onNewOffer} />
+            </>
+          )}
+        </Card>
+      )}
 
       <View style={st.stats}>
         <Stat n={rows.length} label="reservas hoy" />
@@ -180,6 +247,10 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
               <View style={{ flex: 1 }}>
                 <Text style={T.strong}>{r.neighbour_name}{r.pickup_at ? ` · ${hhmm(r.pickup_at)}` : ''}</Text>
                 <Text style={T.small}>{r.qty > 1 ? `${r.qty} × ` : ''}{r.offer_title}</Text>
+                <Text style={[T.small, { color: r.mode === 'entrega' ? colors.blue : colors.muted, fontWeight: '600' }]}>
+                  {r.mode === 'entrega' ? `A domicilio${r.delivery_slot ? ' · ' + r.delivery_slot : ''}${r.delivery_fee_cents ? ' · entrega ' + (r.delivery_fee_cents / 100).toFixed(2).replace('.', ',') + ' €' : ''}` : 'Recoge en tienda'}
+                </Text>
+                {r.mode === 'entrega' && !!r.delivery_address && !done && <Text style={T.small}>{r.delivery_address}</Text>}
               </View>
               <Badge label={LABEL[r.status]} color={TONE[r.status].color} soft={TONE[r.status].soft} />
             </View>
@@ -192,14 +263,14 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
             )}
             {r.status === 'lista' && (
               <View style={st.row}>
-                <Button label="Ya lo ha recogido" busy={busyId === r.id} onPress={() => act(r.id, 'recogida')} style={{ flex: 1 }} />
+                <Button label={r.mode === 'entrega' ? 'Entregado' : 'Ya lo ha recogido'} busy={busyId === r.id} onPress={() => act(r.id, 'recogida')} style={{ flex: 1 }} />
                 <Button label="No vino" tone="ghost" onPress={() => act(r.id, 'no_show')} />
               </View>
             )}
           </Card>
         );
       })}
-      <Text style={[T.small, { marginBottom: 24, textAlign: 'center' }]}>Sin pagos en la app: el vecino reserva y te paga a ti al recoger.</Text>
+      <Text style={[T.small, { marginBottom: 24, textAlign: 'center' }]}>Sin pagos en la app: el vecino reserva y te paga a ti al recoger o al recibirlo.</Text>
     </ScrollView>
   );
 }

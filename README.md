@@ -6,9 +6,11 @@ App de barrio. Piloto de comercio en General Lacy y alrededores (Arganzuela, Mad
 
 ## Qué hay ahora (fase 1)
 
-- **Mi calle (vecino):** ofertas del día, "Resérvamelo", tus reservas y cancelarlas, código para verificarte en una tienda.
-- **Mi tienda (tendero):** reservas de hoy (aceptar, sin stock, recogida, no vino), contador de 10 reservas gratis, confirmar a un vecino con su código. Las reservas nuevas llegan al momento.
-- **Ofertas (tendero):** oferta rápida de tipo rebaja, lote o novedad, con plantilla, cantidad y hora, y vista previa.
+- **Mi calle (vecino):** la calle dibujada, tus reservas, y «Hoy en tu calle»: una tarjeta por tienda con su menú y sus ofertas, por orden de hora, que termina en «Ya estás al día». Código para verificarte en una tienda.
+- **Tiendas (vecino):** comercio de tu calle con su fachada, filtros (tiendas, restaurantes, a domicilio) y ficha con horario, menú del día, ofertas, cómo te lo dan y quién está detrás.
+- **Reservar:** recoger en tienda o que te lo traiga alguien de la tienda (franja, precio de entrega y dirección que solo ve la tienda y se borra al entregar). En restaurantes: comer allí, para llevar o a casa, con hora y alérgenos antes de reservar.
+- **Mi tienda / Mi bar (tendero):** reservas de hoy (aceptar, sin stock, entregado, no vino) con modo y dirección de entrega, menú del día con sus reservas, contador de 10 reservas gratis, confirmar vecinos y cambiar de tienda si tienes varias. **Ajustes:** horario, presentación y reglas de entrega.
+- **Publicar (tendero):** oferta de tipo rebaja, lote o novedad. Los restaurantes publican además su menú del día (alérgenos obligatorios, raciones que se cierran solas; no cuenta como oferta).
 - **Entrada** con correo y contraseña. Volveremos al código por correo cuando haya servidor de correo propio (SMTP). Si la cuenta se confirma por correo, la app pide el nombre la primera vez que entras.
 - **Diseño realista** (el elegido en el lienzo): fondo gris claro, tarjetas blancas, verde de tienda. Las pestañas de tienda solo aparecen a quien tiene una tienda dada de alta.
 
@@ -28,13 +30,15 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 - Nunca se fijan ni limitan precios: cada tienda decide el suyo. La calle no ordena por precio ni compara tiendas, y cada tienda ocupa una sola tarjeta.
 - Tres tipos de oferta: rebaja (precio de antes y de ahora; el tendero confirma que el de antes es el mínimo de 30 días o que el producto está a punto de caducar), lote y novedad (precio cerrado, sin tachar). Siempre se ve el precio final.
 - El vecino puede silenciar una tienda.
-- Cada uno ve solo sus reservas; la tienda solo las suyas y el nombre de quien reserva. Nunca se guarda portal ni piso.
+- Cada uno ve solo sus reservas; la tienda solo las suyas y el nombre de quien reserva. La dirección de entrega solo existe mientras dura el pedido: se borra al entregar, cancelar o rechazar.
+- Entregas: solo si la tienda las ha activado; el precio lo calcula la base de datos con las reglas de la tienda (gratis a partir de un importe).
+- Menú del día (`0007`): solo restaurantes, uno al día, alérgenos obligatorios, raciones que se descuentan y se cierran solas. El tipo de comercio y la fachada los ponemos nosotros en el alta.
 
 ## Puesta en marcha
 
 1. `npm install`
 2. La conexión a Supabase ya está en `src/config.ts`.
-3. Las migraciones `0001` a `0006` de `supabase/migrations/` ya están aplicadas en el proyecto Closer2you (12/10/2026). Solo hay que ejecutarlas a mano, en orden y una vez, si se crea un proyecto nuevo.
+3. Las migraciones `0001` a `0007` de `supabase/migrations/` ya están aplicadas en el proyecto Closer2you (12/10/2026). Solo hay que ejecutarlas a mano, en orden y una vez, si se crea un proyecto nuevo.
 4. Para pruebas: Supabase > Authentication > Sign In / Providers > Email, desactiva "Confirm email".
 5. Android: `npx eas-cli@latest build -p android --profile preview` genera un APK que se instala directamente, sin Google Play.
 
@@ -43,7 +47,8 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 - Verificación por factura y por DNI (el DNI, solo tras revisión legal y sin guardar la foto).
 - Elección de cuota a partir de la reserva 11.
 - Avisos push al tendero con la app cerrada, y al vecino como máximo 1 aviso al día por tienda.
-- Fotos de fachada en la ficha de cada tienda (las hace Stoop en el alta).
-- Recogida en tienda o entrega propia; restaurantes con menú del día; «Hoy en tu calle».
+- Fotos reales de fachada en la ficha de cada tienda (las hace Stoop en el alta). Hoy se usa la ilustración según el tipo.
+- Distancia real a cada tienda y radio de entrega comprobado (hoy el radio es informativo).
+- Avisos push: necesitan una versión propia de la app (development build), no funcionan en Expo Go.
 - Fase 2: vecinos, Vuelvo a casa, cuidado y profesionales verificados (con revisión de seguridad antes de abrirla a vecinos reales).
 - `npm run lint` y `npx tsc --noEmit` deben pasar antes de cada versión.
