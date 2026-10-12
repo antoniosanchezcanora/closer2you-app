@@ -46,7 +46,8 @@ export default function Login() {
 
   return (
     <View style={st.wrap}>
-      <Text style={T.h1}>Volver al barrio</Text>
+      <Text style={T.h1}>Stoop</Text>
+      <Text style={T.strong}>El barrio te cuida.</Text>
       <Text style={T.small}>Zona piloto: General Lacy y sus calles de alrededor.</Text>
       <View style={st.row}>
         <Chip label="Crear cuenta" on={mode === 'crear'} onPress={() => setMode('crear')} />

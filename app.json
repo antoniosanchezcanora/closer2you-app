@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "closer2you",
-    "slug": "closer2you",
+    "name": "Stoop",
+    "slug": "stoop",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.closer2you.app"
+      "bundleIdentifier": "com.stoopbarrio.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.closer2you.app"
+      "package": "com.stoopbarrio.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"

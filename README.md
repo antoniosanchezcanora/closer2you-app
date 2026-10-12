@@ -1,4 +1,6 @@
-# closer2you
+# Stoop
+
+El barrio te cuida.
 
 App de barrio. Piloto de comercio en General Lacy y alrededores (Arganzuela, Madrid): las tiendas publican ofertas, los vecinos reservan y pagan en la tienda al recoger. No hay pagos dentro de la app.
 

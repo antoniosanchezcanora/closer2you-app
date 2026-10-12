@@ -1,4 +1,4 @@
--- closer2you: piloto de comercio (General Lacy y alrededores)
+-- Stoop: piloto de comercio (General Lacy y alrededores)
 -- Solo reservas: no hay pagos dentro de la app.
 -- Las tiendas las damos de alta nosotros en persona (service role); nadie puede crear una tienda desde la app.
 
