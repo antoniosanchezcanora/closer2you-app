@@ -44,10 +44,9 @@ create trigger offer_update before update on public.offers
   for each row execute function public.tg_offer_update();
 
 -- Las ofertas no se borran (borrar permitiría saltarse el límite diario): se retiran.
-drop policy if exists offers_owner_all on public.offers;
-create policy offers_owner_select on public.offers for select using (owns_shop(shop_id));
-create policy offers_owner_insert on public.offers for insert with check (owns_shop(shop_id));
-create policy offers_owner_update on public.offers for update using (owns_shop(shop_id)) with check (owns_shop(shop_id));
+-- Se mantiene offers_owner_all (de 0001) y se añade una política restrictiva que
+-- bloquea el borrado para todos. Así no hace falta borrar ninguna política existente.
+create policy offers_no_delete on public.offers as restrictive for delete using (false);
 
 -- Tiendas silenciadas por cada vecino
 create table if not exists public.muted_shops (
