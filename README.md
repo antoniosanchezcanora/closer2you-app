@@ -34,7 +34,7 @@ Están en `supabase/migrations/0001_piloto_comercio.sql` y se comprueban en la b
 
 1. `npm install`
 2. La conexión a Supabase ya está en `src/config.ts`.
-3. Las migraciones `0001` a `0005` de `supabase/migrations/` ya están aplicadas en el proyecto Closer2you (12/10/2026). Solo hay que ejecutarlas a mano, en orden y una vez, si se crea un proyecto nuevo.
+3. Las migraciones `0001` a `0006` de `supabase/migrations/` ya están aplicadas en el proyecto Closer2you (12/10/2026). Solo hay que ejecutarlas a mano, en orden y una vez, si se crea un proyecto nuevo.
 4. Para pruebas: Supabase > Authentication > Sign In / Providers > Email, desactiva "Confirm email".
 5. Android: `npx eas-cli@latest build -p android --profile preview` genera un APK que se instala directamente, sin Google Play.
 
