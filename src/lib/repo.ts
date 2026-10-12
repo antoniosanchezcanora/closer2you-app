@@ -1,5 +1,9 @@
 import { supabase } from './supabase';
+import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
 import type { NewOffer, Offer, Repo, Reservation, ReservationStatus, Shop } from './types';
+
+const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
+const isLive = (o: Offer) => o.active !== false && o.qty_left > 0 && new Date(o.until).getTime() > Date.now();
 
 // ------------------------------------------------------------------
 // Demostración: una frutería de ejemplo con datos en memoria.
@@ -10,9 +14,9 @@ function demoRepo(): Repo {
   const at = (min: number) => new Date(now + min * 60000).toISOString();
   const shop: Shop = { id: 's1', name: 'Frutería Lacy', category: 'fruteria', street: 'General Lacy', hours: 'Hasta las 20:30', free_reservations_used: 6 };
   const offers: Offer[] = [
-    { id: 'o1', shop_id: 's1', shop_name: shop.name, title: 'Manzanas reineta', unit: 'el kilo', price_cents: 168, old_price_cents: 240, qty_left: 8, until: at(240) },
-    { id: 'o2', shop_id: 's1', shop_name: shop.name, title: 'Caja sorpresa de fruta', unit: 'unos 3 kg', price_cents: 350, old_price_cents: 700, qty_left: 4, until: at(240) },
-    { id: 'o3', shop_id: 's2', shop_name: 'Horno de la esquina', title: 'Pan del día', unit: 'la barra', price_cents: 60, old_price_cents: 120, qty_left: 10, until: at(120) },
+    { id: 'o1', shop_id: 's1', shop_name: shop.name, title: 'Manzanas reineta', unit: 'el kilo', price_cents: 168, old_price_cents: 240, qty_left: 8, until: at(240), created_at: at(-200), active: true },
+    { id: 'o2', shop_id: 's3', shop_name: 'Mercado La Huerta', title: 'Caja sorpresa de fruta', unit: 'unos 3 kg', price_cents: 350, old_price_cents: 700, qty_left: 4, until: at(240), created_at: at(-1500), active: true },
+    { id: 'o3', shop_id: 's2', shop_name: 'Horno de la esquina', title: 'Pan del día', unit: 'la barra', price_cents: 60, old_price_cents: 120, qty_left: 10, until: at(120), created_at: at(-30), active: true },
   ];
   const res: Reservation[] = [
     { id: 'r1', offer_id: 'o1', shop_id: 's1', offer_title: 'Manzanas reineta', neighbour_name: 'Marta', qty: 1, pickup_at: at(30), note: null, status: 'nueva', created_at: at(-20) },
@@ -21,12 +25,14 @@ function demoRepo(): Repo {
     { id: 'r4', offer_id: 'o1', shop_id: 's1', offer_title: 'Fresas, 500 g', neighbour_name: 'Lucía', qty: 1, pickup_at: at(105), note: null, status: 'lista', created_at: at(-40) },
   ];
   const mine: Reservation[] = [];
+  const muted = new Set<string>();
   const wait = () => new Promise((r) => setTimeout(r, 150));
   const find = (id: string) => res.find((r) => r.id === id) || mine.find((r) => r.id === id);
 
   return {
     mode: 'demo',
-    async liveOffers() { await wait(); return offers.filter((o) => o.qty_left > 0).map((o) => ({ ...o })); },
+    async liveOffers() { await wait(); return offers.filter((o) => isLive(o) && !muted.has(o.shop_id)).map((o) => ({ ...o })); },
+    async muteShop(shopId) { await wait(); muted.add(shopId); },
     async reserve(offerId, qty, note) {
       await wait();
       const o = offers.find((x) => x.id === offerId);
@@ -50,8 +56,18 @@ function demoRepo(): Repo {
     },
     async publishOffer(n: NewOffer) {
       await wait();
-      offers.unshift({ id: 'o' + Date.now(), shop_id: shop.id, shop_name: shop.name, ...n });
+      const today = madridDay(new Date().toISOString());
+      const mineAll = offers.filter((o) => o.shop_id === shop.id);
+      if (mineAll.filter((o) => o.created_at && madridDay(o.created_at) === today).length >= MAX_OFERTAS_DIA) throw new Error('Hoy ya has publicado 2 ofertas. Mañana podrás publicar de nuevo.');
+      if (mineAll.filter(isLive).length >= MAX_OFERTAS_ACTIVAS) throw new Error('Ya tienes 2 ofertas en la calle. Retira una o espera a que se agote para publicar otra.');
+      offers.unshift({ id: 'o' + Date.now(), shop_id: shop.id, shop_name: shop.name, created_at: new Date().toISOString(), active: true, ...n });
     },
+    async shopOffersToday() {
+      await wait();
+      const today = madridDay(new Date().toISOString());
+      return offers.filter((o) => o.shop_id === shop.id && ((o.created_at && madridDay(o.created_at) === today) || isLive(o))).map((o) => ({ ...o }));
+    },
+    async withdrawOffer(id) { await wait(); const o = offers.find((x) => x.id === id); if (o) o.active = false; },
     async confirmNeighbour(code) {
       await wait();
       if (!/^LACY-\d{4}$/i.test(code.trim())) throw new Error('Código no válido');
@@ -84,9 +100,15 @@ function liveRepo(): Repo {
   return {
     mode: 'live',
     async liveOffers() {
-      const rows = ok(await sb.from('offers').select('id, shop_id, title, unit, price_cents, old_price_cents, qty_left, until, shops(name)').gt('qty_left', 0).order('created_at', { ascending: false }));
-      return (rows as any[]).map((o) => ({ ...o, shop_name: o.shops?.name }));
+      const me = await uid();
+      const [rows, mutedRows] = await Promise.all([
+        sb.from('offers').select('id, shop_id, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active, shops(name)').eq('active', true).gt('qty_left', 0).gt('until', new Date().toISOString()).order('created_at', { ascending: false }).then(ok),
+        sb.from('muted_shops').select('shop_id').eq('neighbour_id', me).then(ok),
+      ]);
+      const muted = new Set((mutedRows as any[]).map((m) => m.shop_id));
+      return (rows as any[]).filter((o) => !muted.has(o.shop_id)).map((o) => ({ ...o, shop_name: o.shops?.name }));
     },
+    async muteShop(shopId) { ok(await sb.from('muted_shops').insert({ neighbour_id: await uid(), shop_id: shopId })); },
     async reserve(offerId, qty, note) {
       // shop_id lo rellena el trigger a partir de la oferta
       ok(await sb.from('reservations').insert({ offer_id: offerId, shop_id: '00000000-0000-0000-0000-000000000000', neighbour_id: await uid(), qty, note: note || null }));
@@ -116,6 +138,15 @@ function liveRepo(): Repo {
       ok(await sb.from('offers').insert({ shop_id: shop.id, ...n }));
     },
     async confirmNeighbour(code) { return ok(await sb.rpc('confirm_neighbour', { p_code: code })) as string; },
+    async shopOffersToday() {
+      const shop = shopCache ?? (await this.myShop());
+      if (!shop) return [];
+      const since = new Date(Date.now() - 36 * 3600 * 1000).toISOString();
+      const rows = ok(await sb.from('offers').select('id, shop_id, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active').eq('shop_id', shop.id).or(`created_at.gte.${since},and(active.eq.true,until.gt.${new Date().toISOString()})`).order('created_at', { ascending: false }));
+      const today = madridDay(new Date().toISOString());
+      return (rows as Offer[]).filter((o) => (o.created_at && madridDay(o.created_at) === today) || isLive(o));
+    },
+    async withdrawOffer(id) { ok(await sb.from('offers').update({ active: false }).eq('id', id)); },
   };
 }
 

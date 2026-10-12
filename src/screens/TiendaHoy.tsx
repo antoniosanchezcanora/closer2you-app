@@ -3,7 +3,8 @@ import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } 
 import { Avatar, Button, Card, T, Tag } from '../components/ui';
 import { repo } from '../lib/repo';
 import { supabase } from '../lib/supabase';
-import type { Reservation, ReservationStatus, Shop } from '../lib/types';
+import { MAX_OFERTAS_DIA } from '../lib/types';
+import type { Offer, Reservation, ReservationStatus, Shop } from '../lib/types';
 import { colors, hhmm } from '../theme';
 
 const LABEL: Record<ReservationStatus, string> = {
@@ -17,6 +18,7 @@ const AVATARS = [colors.pink, colors.lilac, colors.yellow, colors.mint, colors.p
 export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
   const [shop, setShop] = useState<Shop | null>(null);
   const [rows, setRows] = useState<Reservation[]>([]);
+  const [myOffers, setMyOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -25,9 +27,10 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
 
   const load = useCallback(async () => {
     try {
-      const [s, r] = await Promise.all([repo.myShop(), repo.shopReservations()]);
+      const [s, r, o] = await Promise.all([repo.myShop(), repo.shopReservations(), repo.shopOffersToday()]);
       setShop(s);
       setRows(r);
+      setMyOffers(o);
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
     } finally {
@@ -55,6 +58,13 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
     }
   };
 
+  const withdraw = (o: Offer) => {
+    Alert.alert('Retirar oferta', `"${o.title}" desaparecerá de la calle. Las reservas ya hechas se mantienen.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Retirar', style: 'destructive', onPress: async () => { try { await repo.withdrawOffer(o.id); await load(); } catch (e: any) { Alert.alert('Error', e.message); } } },
+    ]);
+  };
+
   const confirm = async () => {
     try {
       const name = await repo.confirmNeighbour(code);
@@ -74,6 +84,10 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
   }
 
   const used = shop?.free_reservations_used ?? 0;
+  const madrid = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
+  const today = madrid(new Date().toISOString());
+  const publishedToday = myOffers.filter((o) => o.created_at && madrid(o.created_at) === today).length;
+  const live = myOffers.filter((o) => o.active !== false && o.qty_left > 0 && new Date(o.until).getTime() > Date.now());
   const nuevas = rows.filter((r) => r.status === 'nueva').length;
 
   return (
@@ -123,6 +137,23 @@ export default function TiendaHoy({ onNewOffer }: { onNewOffer: () => void }) {
           {confirmed && <Text style={T.strong}>Hecho. {confirmed} ya puede reservar en el barrio.</Text>}
         </View>
       )}
+
+      <Card>
+        <View style={st.row}>
+          <Text style={T.strong}>En la calle ahora</Text>
+          <Text style={T.small}>Hoy: {publishedToday} de {MAX_OFERTAS_DIA} publicaciones</Text>
+        </View>
+        {live.length === 0 && <Text style={T.small}>No tienes ofertas activas.</Text>}
+        {live.map((o) => (
+          <View key={o.id} style={st.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={T.body}>{o.title}</Text>
+              <Text style={T.small}>Quedan {o.qty_left} · hasta las {hhmm(o.until)}</Text>
+            </View>
+            <Button label="Retirar" tone="ghost" onPress={() => withdraw(o)} />
+          </View>
+        ))}
+      </Card>
 
       <Text style={[T.h2, { marginTop: 4 }]}>Reservas de hoy</Text>
       {rows.length === 0 && !loading && <Text style={T.small}>Todavía no hay reservas. Publica una oferta para que se encienda tu ventana.</Text>}

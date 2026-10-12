@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, T, Tag } from '../components/ui';
+import { Button, Card, T } from '../components/ui';
 import { repo } from '../lib/repo';
 import type { Offer, Reservation } from '../lib/types';
 import { colors, eur, hhmm } from '../theme';
@@ -42,6 +42,21 @@ export default function VecinoHoy() {
     }
   };
 
+  const mute = (shopId: string, name?: string) => {
+    Alert.alert('Silenciar tienda', `No verás más ofertas de ${name ?? 'esta tienda'} en tu calle.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Silenciar', style: 'destructive', onPress: async () => { try { await repo.muteShop(shopId); await load(); } catch (e: any) { Alert.alert('Error', e.message); } } },
+    ]);
+  };
+
+  // Agrupa por tienda: quien publica más no ocupa más sitio en la calle.
+  const groups = Object.values(
+    offers.reduce<Record<string, { shopId: string; shopName?: string; offers: Offer[] }>>((acc, o) => {
+      (acc[o.shop_id] ??= { shopId: o.shop_id, shopName: o.shop_name, offers: [] }).offers.push(o);
+      return acc;
+    }, {}),
+  );
+
   const askCode = async () => {
     try { setCode(await repo.requestShopCode()); } catch (e: any) { Alert.alert('Error', e.message); }
   };
@@ -54,30 +69,30 @@ export default function VecinoHoy() {
       </View>
 
       {offers.length === 0 && !loading && <Text style={T.small}>Ahora mismo no hay ofertas. Vuelve por la tarde, que es cuando más salen.</Text>}
-      {offers.map((o) => {
-        const pct = o.old_price_cents ? Math.round(100 - (o.price_cents * 100) / o.old_price_cents) : 0;
-        return (
-          <Card key={o.id}>
-            <View style={st.row}>
-              <View style={st.window} />
+      {/* Una tarjeta por tienda, ordenadas por la oferta más reciente. Nunca por precio ni descuento. */}
+      {groups.map((g) => (
+        <Card key={g.shopId}>
+          <View style={st.row}>
+            <View style={st.window} />
+            <Text style={[T.strong, { flex: 1 }]}>{g.shopName}</Text>
+            <Button label="Silenciar" tone="ghost" onPress={() => mute(g.shopId, g.shopName)} />
+          </View>
+          {g.offers.map((o) => (
+            <View key={o.id} style={st.offer}>
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={st.kicker}>{o.shop_name} · hasta las {hhmm(o.until)}</Text>
                 <Text style={T.strong}>{o.title}</Text>
                 <View style={st.row}>
                   <Text style={st.price}>{eur(o.price_cents)}</Text>
                   {!!o.old_price_cents && <Text style={[T.small, { textDecorationLine: 'line-through' }]}>{eur(o.old_price_cents)}</Text>}
                   <Text style={T.small}>{o.unit}</Text>
                 </View>
+                <Text style={T.small}>Quedan {o.qty_left} · hasta las {hhmm(o.until)}</Text>
               </View>
-              {pct > 0 && <Tag label={`-${pct}%`} bg={colors.pink} />}
-            </View>
-            <View style={st.row}>
-              <Text style={[T.small, { flex: 1 }]}>Quedan {o.qty_left}</Text>
               <Button label="Resérvamelo" busy={busyId === o.id} onPress={() => reserve(o)} />
             </View>
-          </Card>
-        );
-      })}
+          ))}
+        </Card>
+      ))}
 
       {mine.length > 0 && <Text style={[T.h2, { marginTop: 8 }]}>Tus reservas</Text>}
       {mine.map((r) => (
@@ -107,7 +122,8 @@ export default function VecinoHoy() {
 const st = StyleSheet.create({
   wrap: { padding: 16, gap: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  window: { width: 40, height: 50, borderRadius: 6, borderWidth: 3, borderColor: colors.ink, backgroundColor: colors.yellow },
+  offer: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
+  window: { width: 28, height: 34, borderRadius: 6, borderWidth: 3, borderColor: colors.ink, backgroundColor: colors.yellow },
   kicker: { fontSize: 12, fontWeight: '700', color: colors.muted },
   price: { fontSize: 18, fontWeight: '800', color: colors.ink },
   verify: { backgroundColor: colors.mintSoft, borderRadius: 18, padding: 14, gap: 8 },

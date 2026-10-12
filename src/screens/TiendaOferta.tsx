@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button, Chip, T } from '../components/ui';
 import { repo } from '../lib/repo';
+import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from '../lib/types';
 import { colors, eur } from '../theme';
 
 // Plantillas para que la oferta salga en diez segundos. El tendero puede cambiar el texto.
@@ -30,6 +31,25 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
   const [until, setUntil] = useState<'14' | 'cierre'>('cierre');
   const [busy, setBusy] = useState(false);
   const [published, setPublished] = useState(false);
+  const [blocked, setBlocked] = useState<string | null>(null);
+
+  // Comprueba los límites antes de que el tendero rellene nada.
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await repo.shopOffersToday();
+        const madrid = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
+        const today = madrid(new Date().toISOString());
+        const hoy = list.filter((o) => o.created_at && madrid(o.created_at) === today).length;
+        const activas = list.filter((o) => o.active !== false && o.qty_left > 0 && new Date(o.until).getTime() > Date.now()).length;
+        if (hoy >= MAX_OFERTAS_DIA) setBlocked('Hoy ya has publicado 2 ofertas. Mañana podrás publicar de nuevo.');
+        else if (activas >= MAX_OFERTAS_ACTIVAS) setBlocked('Ya tienes 2 ofertas en la calle. Retira una en "Mi tienda" o espera a que se agote.');
+        else setBlocked(null);
+      } catch {
+        setBlocked(null);
+      }
+    })();
+  }, [published]);
 
   const oldCents = Math.round(parseFloat(price.replace(',', '.')) * 100) || 0;
   const newCents = Math.round((oldCents * (100 - pct)) / 100);
@@ -64,6 +84,8 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
         <Text style={T.h1}>Oferta rápida</Text>
         <Text style={T.small}>Diez segundos y tu ventana se enciende en la calle.</Text>
       </View>
+
+      {blocked && !published && <Text style={st.blocked}>{blocked}</Text>}
 
       <Text style={T.h2}>1. Qué quieres sacar hoy</Text>
       <View style={st.wrapRow}>
@@ -111,7 +133,7 @@ export default function TiendaOferta({ onDone }: { onDone: () => void }) {
           <Button label="Ver reservas" tone="mint" onPress={onDone} />
         </>
       ) : (
-        <Button label="Publicar oferta" busy={busy} onPress={publish} />
+        <Button label="Publicar oferta" busy={busy} disabled={!!blocked} onPress={publish} />
       )}
       <View style={{ height: 24 }} />
     </ScrollView>
@@ -131,5 +153,6 @@ const st = StyleSheet.create({
   previewKicker: { fontSize: 12, fontWeight: '700', color: colors.yellow },
   previewTitle: { fontSize: 15, fontWeight: '800', color: '#FFF6E5' },
   previewSub: { fontSize: 13, color: '#CFC6EA' },
+  blocked: { backgroundColor: colors.cream, borderRadius: 18, borderWidth: 2, borderColor: colors.ink, padding: 12, fontSize: 15, fontWeight: '700', color: colors.ink },
   ok: { backgroundColor: colors.mintSoft, borderRadius: 18, borderWidth: 2, borderColor: colors.ink, padding: 12, fontSize: 15, fontWeight: '700', color: colors.ink },
 });

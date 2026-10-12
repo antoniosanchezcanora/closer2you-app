@@ -19,7 +19,13 @@ export type Offer = {
   old_price_cents: number | null;
   qty_left: number;
   until: string;
+  created_at?: string;
+  active?: boolean;
 };
+
+// Límites de publicación por tienda (los garantiza la base de datos).
+export const MAX_OFERTAS_DIA = 2;
+export const MAX_OFERTAS_ACTIVAS = 2;
 
 export type Reservation = {
   id: string;
@@ -54,10 +60,13 @@ export interface Repo {
   myReservations(): Promise<Reservation[]>;
   cancel(reservationId: string): Promise<void>;
   requestShopCode(): Promise<string>;
+  muteShop(shopId: string): Promise<void>;
   // tienda
   myShop(): Promise<Shop | null>;
   shopReservations(): Promise<Reservation[]>;
   setStatus(reservationId: string, status: ReservationStatus): Promise<void>;
   publishOffer(offer: NewOffer): Promise<void>;
+  shopOffersToday(): Promise<Offer[]>; // publicadas hoy (activas o no) + activas de otros días
+  withdrawOffer(offerId: string): Promise<void>;
   confirmNeighbour(code: string): Promise<string>;
 }
