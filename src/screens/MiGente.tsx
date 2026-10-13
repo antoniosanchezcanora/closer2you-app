@@ -27,6 +27,25 @@ function Btn112({ big }: { big?: boolean }) {
   );
 }
 
+// Para el entorno: si oyes gritos o golpes en tu edificio y no sabes qué hacer.
+// El 016 atiende 24 horas y no aparece en la factura (sí en el registro de llamadas del móvil).
+// Fuente: La Moncloa, «Teléfono 016: ¿qué es y cómo funciona?» (2026).
+const call016 = () => Linking.openURL('tel:016').catch(() => Alert.alert('Llama al 016', 'Marca 016 desde el teléfono.'));
+const wa016 = () => Linking.openURL('https://wa.me/34600000016').catch(() => Alert.alert('WhatsApp del 016', 'Escribe al 600 000 016.'));
+function Card016() {
+  return (
+    <Card style={{ gap: 8 }}>
+      <Text style={T.h2}>¿Oyes algo en tu edificio?</Text>
+      <Text style={T.body}>Si oyes gritos o golpes en casa de un vecino o una vecina y hay peligro ahora, llama al 112. Si no sabes qué hacer, el 016 te orienta, también a vecinos y familiares.</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Button small label="Llamar al 016" tone="soft" onPress={call016} style={{ flex: 1 }} />
+        <Button small label="WhatsApp 016" tone="soft" onPress={wa016} style={{ flex: 1 }} />
+      </View>
+      <Text style={T.small}>Atiende las 24 horas. La llamada no sale en la factura, pero sí en el registro de llamadas del móvil.</Text>
+    </Card>
+  );
+}
+
 // Vecinos > Mi gente: el círculo de confianza y todo lo de cuidarnos.
 export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Conversation) => void }) {
   const [people, setPeople] = useState<Person[]>([]);
@@ -244,6 +263,7 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
         </View>
       )}
       {sent.length > 0 && <Note>{`Esperando a que acepten: ${sent.map((p) => p.name).join(', ')}.`}</Note>}
+      <Card016 />
       <Note>Stoop no sustituye al 112. Los avisos llegan mientras tu gente tiene Stoop abierto; los avisos con el móvil bloqueado llegarán con la versión instalable.</Note>
     </ScrollView>
   );
