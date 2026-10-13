@@ -6,6 +6,7 @@ import { repo } from '../lib/repo';
 import { supabase } from '../lib/supabase';
 import type { ChatMessage, Conversation, Level, Me, NeighbourRequest, NewRequest, ReportReason, RequestCategory, RequestKind } from '../lib/types';
 import { colors, hhmm } from '../theme';
+import MiGente from './MiGente';
 
 const CATS: { id: RequestCategory; label: string }[] = [
   { id: 'compra', label: 'Compra' }, { id: 'recado', label: 'Recado' }, { id: 'prestamo', label: 'Préstamo' }, { id: 'compania', label: 'Compañía' }, { id: 'otro', label: 'Otro' },
@@ -18,7 +19,7 @@ const ago = (iso: string) => {
 };
 
 // Pestaña Vecinos. Fase 2: solo cuentas de prueba hasta que pase la revisión de seguridad.
-export default function Vecinos({ me, children }: { me: Me | null; children?: React.ReactNode }) {
+export default function Vecinos({ me }: { me: Me | null }) {
   const [seg, setSeg] = useState<'tablon' | 'mensajes' | 'mio' | 'gente'>('tablon');
   const [chat, setChat] = useState<Conversation | null>(null);
 
@@ -47,7 +48,7 @@ export default function Vecinos({ me, children }: { me: Me | null; children?: Re
       </View>
       {seg === 'tablon' && <Tablon me={me} onOpenChat={setChat} />}
       {seg === 'mensajes' && <Mensajes onOpen={setChat} />}
-      {seg === 'gente' && (children ?? <View style={st.wrap}><Note>Mi gente llega en el siguiente paso.</Note></View>)}
+      {seg === 'gente' && <MiGente me={me} />}
       {seg === 'mio' && <LoMio me={me} />}
     </View>
   );
@@ -224,6 +225,7 @@ function Chat({ me, conv, onBack }: { me: Me; conv: Conversation; onBack: () => 
     try { await repo.sendMessage(conv.id, body); await load(); } catch (e: any) { setText(body); Alert.alert('No se ha enviado', e.message); }
   };
   const menu = () => Alert.alert(conv.other_name, undefined, [
+    { text: 'Añadir a mi gente', onPress: async () => { try { await repo.invitePerson(conv.other_id); Alert.alert('Invitación enviada', `Cuando ${conv.other_name} acepte, aparecerá en Mi gente.`); } catch (e: any) { Alert.alert('No se ha podido', e.message); } } },
     { text: 'Denunciar', onPress: () => setReporting(true) },
     { text: 'Bloquear', style: 'destructive', onPress: () => Alert.alert('Bloquear', `${conv.other_name} no podrá escribirte ni ver lo que publicas.`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Bloquear', style: 'destructive', onPress: async () => { await repo.blockUser(conv.other_id); onBack(); } }]) },
     { text: 'Cerrar', style: 'cancel' },

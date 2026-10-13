@@ -196,6 +196,59 @@ export type ChatMessage = { id: string; sender_id: string; body: string; created
 export type Level = { favors_given: number; hours_given: number; hours_received: number; level: number; next_at: number };
 export type ReportReason = 'acoso' | 'estafa' | 'cobro' | 'inapropiado' | 'otro';
 
+// Mi gente y Cuidarnos
+export type Person = {
+  link_id: string;
+  other_id: string;
+  name: string;
+  status: 'pendiente' | 'aceptada';
+  i_sent: boolean;
+  neighbour: boolean; // verificado por una tienda (si no, amigo de otro barrio)
+  i_share_vuelvo: boolean;
+  i_share_cuidado: boolean;
+  they_share_vuelvo: boolean;
+  they_share_cuidado: boolean;
+  awake: boolean;
+  last_ok_at: string | null;
+};
+export type CareAlert = { id: string; user_id: string; user_name: string; status: 'abierta' | 'atendida' | 'cerrada'; responder_name: string | null; created_at: string; my_answer: 'voy' | 'no_puedo' | null };
+export type Walk = { id: string; user_id: string; user_name: string; status: 'activa' | 'llegado' | 'cancelada'; eta_at: string; lat: number | null; lng: number | null; pos_at: string | null; created_at: string; ended_at: string | null };
+export type MyPresence = { last_ok_at: string | null; awake_until: string | null };
+
+// Profesionales (Fase 2)
+export type ProKind = 'fisio' | 'clases' | 'cuidados' | 'reparaciones' | 'otro';
+export type Pro = {
+  id: string;
+  user_id: string;
+  kind: ProKind;
+  title: string;
+  about: string | null;
+  price_text: string | null;
+  colegiado: string | null;
+  seguro_rc: boolean;
+  reta: boolean;
+  with_minors: boolean;
+  cert_menores: boolean;
+  status: 'solicitada' | 'verificada' | 'rechazada' | 'pausada';
+  reviews?: number;
+  avg_stars?: number | null;
+  done?: number;
+};
+export type NewPro = Pick<Pro, 'kind' | 'title' | 'about' | 'price_text' | 'colegiado' | 'seguro_rc' | 'reta' | 'with_minors' | 'cert_menores'>;
+export type Appointment = {
+  id: string;
+  pro_id: string;
+  pro_title: string;
+  client_id: string;
+  client_name: string;
+  when_text: string;
+  note: string | null;
+  status: 'pendiente' | 'aceptada' | 'rechazada' | 'hecha' | 'cancelada';
+  created_at: string;
+  reviewed: boolean;
+};
+export type Review = { id: string; stars: number; body: string | null; created_at: string; author_name: string };
+
 // Todo lo que la app necesita de los datos. Hay dos implementaciones:
 // una de demostración en memoria y otra contra Supabase.
 export interface Repo {
@@ -227,6 +280,38 @@ export interface Repo {
   blockUser(userId: string): Promise<void>;
   report(userId: string, reason: ReportReason, details: string, conversationId?: string): Promise<void>;
   myLevel(): Promise<Level>;
+  // Mi gente
+  people(): Promise<Person[]>;
+  myInviteCode(): Promise<string>;
+  inviteByCode(code: string): Promise<void>;
+  invitePerson(userId: string): Promise<void>;
+  answerInvite(linkId: string, accept: boolean): Promise<void>;
+  removePerson(userId: string): Promise<void>;
+  setPerm(userId: string, vuelvo: boolean, cuidado: boolean): Promise<void>;
+  // Cuidarnos
+  myPresence(): Promise<MyPresence>;
+  imOk(): Promise<void>;
+  setAwake(minutes: number): Promise<void>;
+  askHelp(): Promise<void>;
+  careAlerts(): Promise<CareAlert[]>; // las mías abiertas y las de mi gente
+  respondHelp(alertId: string, going: boolean): Promise<void>;
+  closeHelp(alertId: string): Promise<void>;
+  walks(): Promise<Walk[]>; // la mía activa y las de mi gente
+  startWalk(minutes: number): Promise<void>;
+  updateWalk(lat: number, lng: number): Promise<void>;
+  extendWalk(minutes: number): Promise<void>;
+  endWalk(arrived: boolean): Promise<void>;
+  // Profesionales
+  pros(): Promise<Pro[]>;
+  proReviews(proId: string): Promise<Review[]>;
+  requestAppointment(proId: string, whenText: string, note: string): Promise<void>;
+  myAppointments(): Promise<Appointment[]>; // como cliente
+  myPro(): Promise<Pro | null>;
+  applyPro(p: NewPro): Promise<void>;
+  updatePro(p: Partial<NewPro> & { status?: 'verificada' | 'pausada' }): Promise<void>;
+  proAppointments(): Promise<Appointment[]>; // como profesional
+  setAppointment(id: string, status: 'aceptada' | 'rechazada' | 'hecha' | 'cancelada'): Promise<void>;
+  review(appointment: Appointment, stars: number, body: string): Promise<void>;
   // vecino
   shops(): Promise<Shop[]>;
   liveOffers(): Promise<Offer[]>;

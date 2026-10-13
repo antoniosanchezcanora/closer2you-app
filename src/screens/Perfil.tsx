@@ -5,7 +5,7 @@ import { repo } from '../lib/repo';
 import type { Me, Shop } from '../lib/types';
 import { colors } from '../theme';
 
-export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onSignOut: () => void }) {
+export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onSignOut: () => void }) {
   const [stats, setStats] = useState({ reservas: 0, tiendas: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -65,6 +65,15 @@ export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onSignO
         <>
           <Label>Tu negocio</Label>
           <Row title={shop.tipo === 'restaurante' ? 'Modo restaurante' : 'Modo tienda'} sub={`${shop.name} · reservas, publicar y ajustes`} onPress={onShopMode} accent />
+        </>
+      )}
+
+      {onServicio && (
+        <>
+          <Label>Profesionales</Label>
+          <View style={st.group}>
+            <Row title="Ofrecer un servicio profesional" sub="Para autónomos del barrio. Te visitamos antes de aparecer." onPress={onServicio} />
+          </View>
         </>
       )}
 

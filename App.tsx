@@ -10,6 +10,7 @@ import type { Me, Shop } from './src/lib/types';
 import Avisos from './src/screens/Avisos';
 import Login from './src/screens/Login';
 import Perfil from './src/screens/Perfil';
+import Profesionales, { MiServicio } from './src/screens/Profesionales';
 import TiendaAjustes from './src/screens/TiendaAjustes';
 import TiendaHoy from './src/screens/TiendaHoy';
 import TiendaMenu from './src/screens/TiendaMenu';
@@ -20,7 +21,7 @@ import Vecinos from './src/screens/Vecinos';
 import { colors } from './src/theme';
 
 // Modo vecino: Mi calle, Tiendas, Vecinos, Perfil. Modo tienda (se abre desde Perfil): Reservas, Publicar, Ajustes.
-type Tab = 'calle' | 'tiendas' | 'vecinos' | 'perfil' | 'avisos' | 'tienda' | 'oferta' | 'ajustes';
+type Tab = 'calle' | 'tiendas' | 'vecinos' | 'perfil' | 'avisos' | 'servicio' | 'tienda' | 'oferta' | 'ajustes';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('calle');
@@ -30,9 +31,11 @@ export default function App() {
   const [myShop, setMyShop] = useState<Shop | null>(null);
   const [openShop, setOpenShop] = useState<string | null>(null);
   const [publish, setPublish] = useState<'menu' | 'oferta'>('menu');
+  const [donde, setDonde] = useState<'comercios' | 'pros'>('comercios');
   const [shopMode, setShopMode] = useState(false);
   const [unread, setUnread] = useState(0);
   const hasShop = !!myShop;
+  const fase2 = !!me?.fase2 && !!me?.verified;
 
   const refreshUnread = useCallback(async () => {
     try { setUnread((await repo.notices()).filter((n) => !n.read_at).length); } catch { /* sin avisos no pasa nada */ }
@@ -85,9 +88,19 @@ export default function App() {
           <>
             <View style={{ flex: 1 }}>
               {!shopMode && tab === 'calle' && <VecinoHoy me={me ?? null} myShop={myShop} unread={unread} onVerified={loadMe} onAvisos={() => go('avisos')} onOpenShop={(id) => { setOpenShop(id); setTab('tiendas'); }} />}
-              {!shopMode && tab === 'tiendas' && <Tiendas verified={!!me?.verified} openShopId={openShop} onOpenShop={setOpenShop} onCloseShop={() => setOpenShop(null)} />}
+              {!shopMode && tab === 'tiendas' && (
+                fase2 && !openShop ? (
+                  <View style={{ flex: 1 }}>
+                    <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+                      <Segment items={[{ id: 'comercios', label: 'Comercios' }, { id: 'pros', label: 'Profesionales' }]} value={donde} onChange={setDonde} />
+                    </View>
+                    {donde === 'comercios' ? <Tiendas verified={!!me?.verified} openShopId={openShop} onOpenShop={setOpenShop} onCloseShop={() => setOpenShop(null)} /> : <Profesionales />}
+                  </View>
+                ) : <Tiendas verified={!!me?.verified} openShopId={openShop} onOpenShop={setOpenShop} onCloseShop={() => setOpenShop(null)} />
+              )}
               {!shopMode && tab === 'vecinos' && <Vecinos me={me ?? null} />}
-              {!shopMode && tab === 'perfil' && <Perfil me={me ?? null} shop={myShop} unread={unread} onAvisos={() => go('avisos')} onShopMode={() => { setShopMode(true); setTab('tienda'); }} onSignOut={signOut} />}
+              {!shopMode && tab === 'perfil' && <Perfil me={me ?? null} shop={myShop} unread={unread} onAvisos={() => go('avisos')} onShopMode={() => { setShopMode(true); setTab('tienda'); }} onServicio={fase2 ? () => setTab('servicio') : undefined} onSignOut={signOut} />}
+              {!shopMode && tab === 'servicio' && <MiServicio onBack={() => setTab('perfil')} />}
               {!shopMode && tab === 'avisos' && <Avisos onBack={() => go('calle')} onRead={() => setUnread(0)} />}
               {shopMode && tab === 'tienda' && hasShop && <TiendaHoy onNewOffer={() => setTab('oferta')} onSettings={() => setTab('ajustes')} onShopChange={loadMe} />}
               {shopMode && tab === 'ajustes' && hasShop && <TiendaAjustes onDone={() => { loadMe(); setTab('tienda'); }} />}
@@ -114,7 +127,7 @@ export default function App() {
                 <NavItem label="Mi calle" icon="calle" on={tab === 'calle' || tab === 'avisos'} onPress={() => go('calle')} />
                 <NavItem label="Tiendas" icon="tiendas" on={tab === 'tiendas'} onPress={() => go('tiendas')} />
                 <NavItem label="Vecinos" icon="vecinos" on={tab === 'vecinos'} onPress={() => go('vecinos')} />
-                <NavItem label="Perfil" icon="perfil" on={tab === 'perfil'} onPress={() => go('perfil')} badge={unread} />
+                <NavItem label="Perfil" icon="perfil" on={tab === 'perfil' || tab === 'servicio'} onPress={() => go('perfil')} badge={unread} />
               </View>
             )}
           </>

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { BarrioEvent, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Repo, Reservation, ReservationStatus, Shop } from './types';
+import type { Appointment, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
@@ -62,6 +62,28 @@ function demoRepo(): Repo {
     { id: 'e2', creator_id: 'u3', shop_id: 's1', shop_name: 'Frutería Carmen', title: 'Castañas en la puerta', category: 'barrio', starts_at: days(4, 11), place: 'Frutería Carmen', capacity: null, price_text: 'Gratis', description: 'Asamos las primeras castañas de la temporada.', kids: false, active: true, going: 23, me_going: false },
   ];
   let selected = 's1';
+  const people: Person[] = [
+    { link_id: 'l1', other_id: 'u5', name: 'Lucía', status: 'aceptada', i_sent: true, neighbour: true, i_share_vuelvo: true, i_share_cuidado: true, they_share_vuelvo: true, they_share_cuidado: true, awake: true, last_ok_at: null },
+    { link_id: 'l2', other_id: 'u4', name: 'Ana', status: 'aceptada', i_sent: false, neighbour: true, i_share_vuelvo: false, i_share_cuidado: true, they_share_vuelvo: false, they_share_cuidado: true, awake: false, last_ok_at: at(-140) },
+    { link_id: 'l3', other_id: 'u7', name: 'Marta', status: 'aceptada', i_sent: true, neighbour: false, i_share_vuelvo: true, i_share_cuidado: true, they_share_vuelvo: true, they_share_cuidado: false, awake: false, last_ok_at: null },
+    { link_id: 'l4', other_id: 'u6', name: 'Dani', status: 'pendiente', i_sent: false, neighbour: true, i_share_vuelvo: false, i_share_cuidado: false, they_share_vuelvo: false, they_share_cuidado: false, awake: false, last_ok_at: null },
+  ];
+  const presence = { last_ok_at: null as string | null, awake_until: null as string | null };
+  const alerts: CareAlert[] = [];
+  const walks: Walk[] = [
+    { id: 'w1', user_id: 'u5', user_name: 'Lucía', status: 'activa', eta_at: at(12), lat: 40.4003, lng: -3.6937, pos_at: at(-0.5), created_at: at(-8), ended_at: null },
+  ];
+  const pros: Pro[] = [
+    { id: 'p1', user_id: 'u8', kind: 'fisio', title: 'Irene, fisioterapeuta', about: 'Fisioterapia a domicilio en el barrio. Espalda, rodilla y recuperación tras operaciones.', price_text: '40 € la sesión de 50 min', colegiado: 'Colegiada en Madrid', seguro_rc: true, reta: true, with_minors: false, cert_menores: false, status: 'verificada', reviews: 2, avg_stars: 5, done: 6 },
+    { id: 'p2', user_id: 'u9', kind: 'clases', title: 'Laura, clases de inglés', about: 'Clases de inglés para niños de primaria y para adultos que empiezan.', price_text: '15 € la hora', colegiado: null, seguro_rc: false, reta: true, with_minors: true, cert_menores: true, status: 'verificada', reviews: 1, avg_stars: 4, done: 3 },
+  ];
+  const reviews: Record<string, Review[]> = {
+    p1: [{ id: 'rv1', stars: 5, body: 'Me quitó el dolor de espalda en tres sesiones.', created_at: at(-4000), author_name: 'Ana' }, { id: 'rv2', stars: 5, body: null, created_at: at(-9000), author_name: 'Miguel' }],
+    p2: [{ id: 'rv3', stars: 4, body: 'Mi hija va encantada.', created_at: at(-3000), author_name: 'Lucía' }],
+  };
+  const appts: Appointment[] = [];
+  let myPro: Pro | null = null;
+  const proAppts: Appointment[] = [];
   const wait = () => new Promise((r) => setTimeout(r, 120));
   const shopOf = () => shops.find((s) => s.id === selected)!;
 
@@ -96,6 +118,35 @@ function demoRepo(): Repo {
     async blockUser(userId) { await wait(); convs.filter((c) => c.other_id === userId).forEach((c) => { c.status = 'bloqueada'; }); },
     async report() { await wait(); },
     async myLevel() { await wait(); return { ...level }; },
+    async people() { await wait(); return people.map((x) => ({ ...x })); },
+    async myInviteCode() { await wait(); return 'LACY7K'; },
+    async inviteByCode(code) { await wait(); if (!/^[A-Z2-9]{6}$/i.test(code.trim())) throw new Error('Ese código no existe. Revisa las letras.'); people.push({ link_id: 'l' + Date.now(), other_id: 'u' + Date.now(), name: 'Vecino nuevo', status: 'pendiente', i_sent: true, neighbour: true, i_share_vuelvo: false, i_share_cuidado: false, they_share_vuelvo: false, they_share_cuidado: false, awake: false, last_ok_at: null }); },
+    async invitePerson() { await wait(); },
+    async answerInvite(linkId, accept) { await wait(); const i = people.findIndex((x) => x.link_id === linkId); if (i < 0) return; if (accept) Object.assign(people[i], { status: 'aceptada', i_share_vuelvo: true, i_share_cuidado: true, they_share_vuelvo: true, they_share_cuidado: true }); else people.splice(i, 1); },
+    async removePerson(userId) { await wait(); const i = people.findIndex((x) => x.other_id === userId); if (i >= 0) people.splice(i, 1); },
+    async setPerm(userId, vuelvo, cuidado) { await wait(); const x = people.find((p) => p.other_id === userId); if (x) { x.i_share_vuelvo = vuelvo; x.i_share_cuidado = cuidado; } },
+    async myPresence() { await wait(); return { ...presence }; },
+    async imOk() { await wait(); presence.last_ok_at = new Date().toISOString(); },
+    async setAwake(minutes) { await wait(); presence.awake_until = minutes > 0 ? new Date(Date.now() + minutes * 60000).toISOString() : null; },
+    async askHelp() { await wait(); if (!alerts.some((a) => a.user_id === me.id && a.status !== 'cerrada')) alerts.unshift({ id: 'a' + Date.now(), user_id: me.id, user_name: me.name, status: 'abierta', responder_name: null, created_at: new Date().toISOString(), my_answer: null }); },
+    async careAlerts() { await wait(); return alerts.filter((a) => a.status !== 'cerrada').map((a) => ({ ...a })); },
+    async respondHelp(id, going) { await wait(); const a = alerts.find((x) => x.id === id); if (a) { a.my_answer = going ? 'voy' : 'no_puedo'; if (going) { a.status = 'atendida'; a.responder_name = me.name; } } },
+    async closeHelp(id) { await wait(); const a = alerts.find((x) => x.id === id); if (a) a.status = 'cerrada'; },
+    async walks() { await wait(); return walks.filter((w) => w.status === 'activa').map((w) => ({ ...w })); },
+    async startWalk(minutes) { await wait(); if (!walks.some((w) => w.user_id === me.id && w.status === 'activa')) walks.unshift({ id: 'w' + Date.now(), user_id: me.id, user_name: me.name, status: 'activa', eta_at: new Date(Date.now() + minutes * 60000).toISOString(), lat: null, lng: null, pos_at: null, created_at: new Date().toISOString(), ended_at: null }); },
+    async updateWalk(lat, lng) { const w = walks.find((x) => x.user_id === me.id && x.status === 'activa'); if (w) { w.lat = lat; w.lng = lng; w.pos_at = new Date().toISOString(); } },
+    async extendWalk(minutes) { await wait(); const w = walks.find((x) => x.user_id === me.id && x.status === 'activa'); if (w) w.eta_at = new Date(Math.max(Date.now(), new Date(w.eta_at).getTime()) + minutes * 60000).toISOString(); },
+    async endWalk(arrived) { await wait(); const w = walks.find((x) => x.user_id === me.id && x.status === 'activa'); if (w) { w.status = arrived ? 'llegado' : 'cancelada'; w.lat = null; w.lng = null; } },
+    async pros() { await wait(); return pros.filter((p) => p.status === 'verificada').map((p) => ({ ...p })); },
+    async proReviews(id) { await wait(); return (reviews[id] ?? []).map((r) => ({ ...r })); },
+    async requestAppointment(proId, whenText, note) { await wait(); const p = pros.find((x) => x.id === proId)!; appts.unshift({ id: 'ap' + Date.now(), pro_id: p.id, pro_title: p.title, client_id: me.id, client_name: me.name, when_text: whenText, note: note || null, status: 'pendiente', created_at: new Date().toISOString(), reviewed: false }); },
+    async myAppointments() { await wait(); return appts.map((a) => ({ ...a })); },
+    async myPro() { await wait(); return myPro ? { ...myPro } : null; },
+    async applyPro(n) { await wait(); myPro = { ...n, id: 'pme', user_id: me.id, status: 'solicitada' }; },
+    async updatePro(n) { await wait(); if (myPro) Object.assign(myPro, n); },
+    async proAppointments() { await wait(); return proAppts.map((a) => ({ ...a })); },
+    async setAppointment(id, status) { await wait(); [...appts, ...proAppts].filter((a) => a.id === id).forEach((a) => { a.status = status; }); },
+    async review(a, stars, body) { await wait(); const x = appts.find((y) => y.id === a.id); if (x) x.reviewed = true; (reviews[a.pro_id] ??= []).unshift({ id: 'rv' + Date.now(), stars, body: body || null, created_at: new Date().toISOString(), author_name: me.name }); },
     async shops() { await wait(); return shops.map((s) => ({ ...s })); },
     async liveOffers() { await wait(); return offers.filter((o) => isLive(o) && !muted.has(o.shop_id)).map((o) => ({ ...o })); },
     async liveMenus() { await wait(); return menus.filter((m) => m.active && m.qty_left > 0 && !muted.has(m.shop_id)).map((m) => ({ ...m })); },
@@ -173,6 +224,7 @@ function demoRepo(): Repo {
 // ------------------------------------------------------------------
 const SHOP_COLS = 'id, name, category, street, hours, free_reservations_used, tipo, fachada, about, delivery_enabled, delivery_fee_cents, delivery_free_from_cents, delivery_radius_m, delivery_slots, delivery_by';
 const OFFER_COLS = 'id, shop_id, kind, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active';
+const PRO_COLS = 'id, user_id, kind, title, about, price_text, colegiado, seguro_rc, reta, with_minors, cert_menores, status';
 const MENU_COLS = 'id, shop_id, day, starters, mains, includes, price_cents, qty_total, qty_left, until, allergens, takeaway, delivery, active, created_at';
 
 function liveRepo(): Repo {
@@ -285,6 +337,69 @@ function liveRepo(): Repo {
       const r = rows?.[0] ?? { favors_given: 0, hours_given: 0, hours_received: 0, level: 1, next_at: 3 };
       return { favors_given: Number(r.favors_given), hours_given: Number(r.hours_given), hours_received: Number(r.hours_received), level: Number(r.level), next_at: Number(r.next_at) };
     },
+    async people() { return ((ok(await sb.rpc('my_people')) as any[]) ?? []) as Person[]; },
+    async myInviteCode() { return ok(await sb.rpc('my_invite_code')) as string; },
+    async inviteByCode(code) { ok(await sb.rpc('invite_by_code', { p_code: code })); },
+    async invitePerson(userId) { ok(await sb.rpc('invite_person', { p_user: userId })); },
+    async answerInvite(linkId, accept) { ok(await sb.rpc('answer_trust', { p_link: linkId, p_accept: accept })); },
+    async removePerson(userId) { ok(await sb.rpc('remove_trust', { p_user: userId })); },
+    async setPerm(userId, vuelvo, cuidado) { ok(await sb.rpc('set_trust_perm', { p_user: userId, p_vuelvo: vuelvo, p_cuidado: cuidado })); },
+    async myPresence() {
+      const rows = ok(await sb.from('presence').select('last_ok_at, awake_until').eq('user_id', await uid()).limit(1)) as any[];
+      return rows[0] ?? { last_ok_at: null, awake_until: null };
+    },
+    async imOk() { ok(await sb.rpc('i_am_ok')); },
+    async setAwake(minutes) { ok(await sb.rpc('set_awake', { p_minutes: minutes })); },
+    async askHelp() { ok(await sb.rpc('ask_help')); },
+    async careAlerts() {
+      const id = await uid();
+      const rows = ok(await sb.from('care_alerts').select('id, user_id, status, created_at, user:profiles!care_alerts_user_id_fkey(display_name), responder:profiles!care_alerts_responder_id_fkey(display_name)').neq('status', 'cerrada').order('created_at', { ascending: false }).limit(20)) as any[];
+      const ids = rows.map((r) => r.id);
+      const mineAns = ids.length ? (ok(await sb.from('care_responses').select('alert_id, answer').eq('user_id', id).in('alert_id', ids)) as any[]) : [];
+      return rows.map((r) => ({ id: r.id, user_id: r.user_id, user_name: r.user?.display_name ?? 'Tu vecino', status: r.status, responder_name: r.responder?.display_name ?? null, created_at: r.created_at, my_answer: mineAns.find((m) => m.alert_id === r.id)?.answer ?? null }));
+    },
+    async respondHelp(alertId, going) { ok(await sb.rpc('respond_help', { p_alert: alertId, p_going: going })); },
+    async closeHelp(alertId) { ok(await sb.rpc('close_help', { p_alert: alertId })); },
+    async walks() {
+      const rows = ok(await sb.from('walks').select('id, user_id, status, eta_at, lat, lng, pos_at, created_at, ended_at, profiles!walks_user_id_fkey(display_name)').eq('status', 'activa').order('created_at', { ascending: false }).limit(20)) as any[];
+      return rows.map((r) => ({ ...r, profiles: undefined, user_name: r.profiles?.display_name ?? 'Tu gente' })) as Walk[];
+    },
+    async startWalk(minutes) { ok(await sb.rpc('start_walk', { p_minutes: minutes })); },
+    async updateWalk(lat, lng) { ok(await sb.rpc('update_walk', { p_lat: lat, p_lng: lng })); },
+    async extendWalk(minutes) { ok(await sb.rpc('extend_walk', { p_minutes: minutes })); },
+    async endWalk(arrived) { ok(await sb.rpc('end_walk', { p_arrived: arrived })); },
+    async pros() {
+      const [rows, sums] = await Promise.all([
+        sb.from('pros').select(PRO_COLS).eq('status', 'verificada').order('created_at').then(ok) as Promise<any[]>,
+        sb.rpc('pro_summary').then(ok) as Promise<any[]>,
+      ]);
+      return rows.map((p) => { const x = (sums ?? []).find((s: any) => s.pro_id === p.id); return { ...p, reviews: x?.reviews ?? 0, avg_stars: x?.avg_stars == null ? null : Number(x.avg_stars), done: x?.done ?? 0 }; }) as Pro[];
+    },
+    async proReviews(proId) {
+      const rows = ok(await sb.from('pro_reviews').select('id, stars, body, created_at, profiles!pro_reviews_author_id_fkey(display_name)').eq('pro_id', proId).order('created_at', { ascending: false }).limit(30)) as any[];
+      return rows.map((r) => ({ id: r.id, stars: r.stars, body: r.body, created_at: r.created_at, author_name: r.profiles?.display_name ?? 'Vecino' })) as Review[];
+    },
+    async requestAppointment(proId, whenText, note) { ok(await sb.from('pro_appointments').insert({ pro_id: proId, client_id: await uid(), when_text: whenText.trim(), note: note.trim() || null })); },
+    async myAppointments() {
+      const rows = ok(await sb.from('pro_appointments').select('id, pro_id, client_id, when_text, note, status, created_at, pros(title)').eq('client_id', await uid()).order('created_at', { ascending: false }).limit(30)) as any[];
+      const ids = rows.map((r) => r.id);
+      const revs = ids.length ? (ok(await sb.from('pro_reviews').select('appointment_id').in('appointment_id', ids)) as any[]) : [];
+      return rows.map((r) => ({ ...r, pros: undefined, pro_title: r.pros?.title ?? 'Profesional', client_name: '', reviewed: revs.some((v) => v.appointment_id === r.id) })) as Appointment[];
+    },
+    async myPro() {
+      const rows = ok(await sb.from('pros').select(PRO_COLS).eq('user_id', await uid()).limit(1)) as Pro[];
+      return rows[0] ?? null;
+    },
+    async applyPro(n) { ok(await sb.from('pros').insert({ ...n, user_id: await uid() })); },
+    async updatePro(n) { ok(await sb.from('pros').update(n).eq('user_id', await uid())); },
+    async proAppointments() {
+      const pro = await repo.myPro();
+      if (!pro) return [];
+      const rows = ok(await sb.from('pro_appointments').select('id, pro_id, client_id, when_text, note, status, created_at, profiles!pro_appointments_client_id_fkey(display_name)').eq('pro_id', pro.id).order('created_at', { ascending: false }).limit(50)) as any[];
+      return rows.map((r) => ({ ...r, profiles: undefined, pro_title: pro.title, client_name: r.profiles?.display_name ?? 'Vecino', reviewed: false })) as Appointment[];
+    },
+    async setAppointment(id, status) { ok(await sb.rpc('set_appointment', { p_appt: id, p_status: status })); },
+    async review(a, stars, body) { ok(await sb.from('pro_reviews').insert({ appointment_id: a.id, pro_id: a.pro_id, author_id: await uid(), stars, body: body.trim() || null })); },
     async shops() {
       return ok(await sb.from('shops').select(SHOP_COLS).eq('active', true).order('name')) as Shop[];
     },

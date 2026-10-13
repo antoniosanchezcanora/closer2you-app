@@ -22,6 +22,14 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Stoop usa tu ubicación solo mientras compartes «Vuelvo a casa» con tu gente y la app está abierta."
+        }
+      ]
+    ]
   }
 }
