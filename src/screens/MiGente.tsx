@@ -2,10 +2,11 @@ import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Badge, Button, Card, Chip, Initial, Label, Note, T } from '../components/ui';
+import { WalkMap } from '../components/WalkMap';
 import { repo } from '../lib/repo';
 import { supabase } from '../lib/supabase';
 import type { CareAlert, Me, MyPresence, Person, Walk } from '../lib/types';
-import { colors, hhmm } from '../theme';
+import { colorFor, colors, hhmm } from '../theme';
 
 // Fuera del render: la hora actual (la regla de pureza de React no deja llamar a Date.now() dentro).
 const nowMs = () => Date.now();
@@ -37,11 +38,24 @@ export default function MiGente({ me }: { me: Me }) {
   const [adding, setAdding] = useState(false);
   const [goingHome, setGoingHome] = useState(false);
   const [, setTick] = useState(0);
+  // Recorrido visto mientras miras la pantalla (solo en este móvil, no se guarda)
+  const [trails, setTrails] = useState<Record<string, { lat: number; lng: number }[]>>({});
 
   const load = useCallback(async () => {
     try {
       const [p, a, w, pr] = await Promise.all([repo.people(), repo.careAlerts(), repo.walks(), repo.myPresence()]);
       setPeople(p); setAlerts(a); setWalks(w); setPresence(pr);
+      setTrails((prev) => {
+        const next: Record<string, { lat: number; lng: number }[]> = {};
+        w.forEach((x) => {
+          const t = prev[x.id] ?? [];
+          if (x.lat != null && x.lng != null) {
+            const last = t[t.length - 1];
+            next[x.id] = last && last.lat === x.lat && last.lng === x.lng ? t : [...t, { lat: x.lat, lng: x.lng }].slice(-200);
+          } else next[x.id] = t;
+        });
+        return next;
+      });
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
     } finally {
@@ -128,7 +142,12 @@ export default function MiGente({ me }: { me: Me }) {
               </View>
             </View>
             {late && <Text style={[T.body, { color: '#8A5A12', fontWeight: '600' }]}>Va con {minsAgo(w.eta_at)} min de retraso. Llámale para ver si todo va bien.</Text>}
-            {w.lat != null && w.lng != null && <Button small label="Ver dónde está" tone="blue" onPress={() => openMap(w.lat!, w.lng!, w.user_name)} />}
+            {w.lat != null && w.lng != null && (
+              <>
+                <WalkMap points={[{ id: w.id, lat: w.lat, lng: w.lng, name: w.user_name, color: colorFor(w.user_name), trail: trails[w.id] }]} />
+                <Button small label="Abrir en Mapas" tone="soft" onPress={() => openMap(w.lat!, w.lng!, w.user_name)} />
+              </>
+            )}
           </Card>
         );
       })}
@@ -311,6 +330,7 @@ function VueltaCasa({ me, walk, people, onClose }: { me: Me; walk: Walk | null; 
       <Text style={T.kicker}>VUELVES A CASA, {me.name.toUpperCase()}</Text>
       <Text style={T.title}>Llegas sobre las {hhmm(walk.eta_at)}</Text>
       <Text style={[T.body, late && { color: '#8A5A12', fontWeight: '600' }]}>{late ? 'Ya es la hora. Si vas bien, avisa o pide más tiempo.' : `${watchers.length} ${watchers.length === 1 ? 'persona te acompaña' : 'personas te acompañan'}: ${watchers.map((p) => p.name).join(', ')}.`}</Text>
+      {walk.lat != null && walk.lng != null && <WalkMap points={[{ id: walk.id, lat: walk.lat, lng: walk.lng, name: me.name, color: colors.blue }]} height={200} />}
       <Card tint={gps === 'on' ? colors.greenSoft : colors.goldSoft}>
         <Text style={T.small}>{gps === 'on' ? 'Compartiendo tu posición mientras Stoop esté abierto.' : gps === 'denied' ? 'Sin permiso de ubicación: tu gente solo sabe a qué hora deberías llegar.' : 'Pidiendo la ubicación…'}</Text>
       </Card>
