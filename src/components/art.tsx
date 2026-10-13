@@ -7,13 +7,17 @@ import type { Fachada as FachadaKind, Shop } from '../lib/types';
 export type LitWindow = { id: string; name: string; awake: boolean; online: boolean };
 
 // A cada persona le toca siempre la misma ventana (no es su casa real: es un sitio fijo en el dibujo).
+// Se reparten por toda la calle para que no se amontonen en el mismo edificio.
+const hashOf = (id: string) => { let h = 0; for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
 function windowFor(people: LitWindow[]) {
+  const n = CALLE_VENTANAS.length;
+  const sorted = [...people].sort((a, b) => hashOf(a.id) - hashOf(b.id));
+  const step = Math.max(1, Math.floor(n / Math.max(1, sorted.length)));
+  const base = sorted.length ? hashOf(sorted[0].id) % n : 0;
   const used = new Set<number>();
-  return people.map((p) => {
-    let h = 0;
-    for (const ch of p.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    let i = h % CALLE_VENTANAS.length;
-    while (used.has(i) && used.size < CALLE_VENTANAS.length) i = (i + 1) % CALLE_VENTANAS.length;
+  return sorted.map((p, k) => {
+    let i = (base + k * step + (k % 2) * 2) % n;
+    while (used.has(i) && used.size < n) i = (i + 1) % n;
     used.add(i);
     return { p, w: CALLE_VENTANAS[i] };
   });
@@ -33,13 +37,13 @@ export function Calle({ width, style, lit = [], onPressWindow }: { width: number
           {windowFor(lit).map(({ p, w }) => {
             const glow = p.awake ? '#FFC24A' : '#FFE08A';
             const label = p.name.replace(/ \(prueba\)$/, '').slice(0, 12);
-            const lw = label.length * 5.6 + 14;
+            const lw = label.length * 6.2 + 16;
             return (
               <G key={p.id} onPress={() => onPressWindow?.(p.id)} accessibilityLabel={`${p.name}, ${p.awake ? 'despierto' : 'conectado'}. Toca para escribir.`}>
-                <Polygon points={w.pts} fill={glow} opacity={0.35} transform={`translate(0 0) scale(1)`} stroke={glow} strokeWidth={6} strokeOpacity={0.35} />
+                <Polygon points={w.pts} fill={glow} opacity={0.45} stroke={glow} strokeWidth={10} strokeOpacity={0.4} strokeLinejoin="round" />
                 <Polygon points={w.pts} fill={glow} />
-                <Rect x={w.cx - lw / 2} y={w.top - 18} width={lw} height={14} rx={7} fill="#1F2328" opacity={0.85} />
-                <SvgText x={w.cx} y={w.top - 8} textAnchor="middle" fontSize={9} fontWeight="700" fill="#FFFFFF">{label}</SvgText>
+                <Rect x={w.cx + 12} y={w.top + 2} width={lw} height={16} rx={8} fill="#1F2328" opacity={0.9} />
+                <SvgText x={w.cx + 12 + lw / 2} y={w.top + 13.5} textAnchor="middle" fontSize={10} fontWeight="700" fontFamily="Inter, Helvetica, Arial, sans-serif" fill="#FFFFFF">{label}</SvgText>
               </G>
             );
           })}
