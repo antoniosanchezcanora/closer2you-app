@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { Me, Menu, MenuReservation, NewOffer, Offer, Repo, Reservation, ReservationStatus, Shop } from './types';
+import type { BarrioEvent, Me, Menu, MenuReservation, NewOffer, Notice, Offer, Repo, Reservation, ReservationStatus, Shop } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
@@ -41,7 +41,16 @@ function demoRepo(): Repo {
   const mine: Reservation[] = [];
   const mres: MenuReservation[] = [];
   const muted = new Set<string>();
-  const me: Me = { name: 'Toni', verified: true, verifiedBy: 'Frutería Carmen' };
+  const me: Me = { id: 'u1', name: 'Toni', verified: true, verifiedBy: 'Frutería Carmen', fase2: true };
+  const notices: Notice[] = [
+    { id: 'n1', kind: 'verificado', title: 'Ya eres vecino verificado', body: 'Te ha verificado Frutería Carmen.', created_at: at(-1440), read_at: at(-1400) },
+    { id: 'n2', kind: 'reserva', title: 'Tu reserva va en camino', body: 'Frutería Carmen · Manzanas reineta', created_at: at(-20), read_at: null },
+  ];
+  const days = (d: number, h: number, m = 0) => { const x = new Date(); x.setDate(x.getDate() + d); x.setHours(h, m, 0, 0); return x.toISOString(); };
+  const events: BarrioEvent[] = [
+    { id: 'e1', creator_id: 'u2', shop_id: null, title: 'Partido nocturno de fútbol 7', category: 'deporte', starts_at: days(2, 21, 30), place: 'Pista del parque', capacity: 14, price_text: 'Gratis', description: 'Nivel de barrio, se juega para pasarlo bien. Trae ropa oscura y clara.', kids: false, active: true, going: 11, me_going: false },
+    { id: 'e2', creator_id: 'u3', shop_id: 's1', shop_name: 'Frutería Carmen', title: 'Castañas en la puerta', category: 'barrio', starts_at: days(4, 11), place: 'Frutería Carmen', capacity: null, price_text: 'Gratis', description: 'Asamos las primeras castañas de la temporada.', kids: false, active: true, going: 23, me_going: false },
+  ];
   let selected = 's1';
   const wait = () => new Promise((r) => setTimeout(r, 120));
   const shopOf = () => shops.find((s) => s.id === selected)!;
@@ -51,6 +60,15 @@ function demoRepo(): Repo {
     async me() { await wait(); return { ...me }; },
     async createProfile(name) { await wait(); me.name = name; },
     async signOut() { await wait(); },
+    async requestDeletion() { await wait(); me.verified = false; },
+    async exportMyData() { await wait(); return JSON.stringify({ perfil: me, reservas: mine, menus: mres }, null, 2); },
+    async notices() { await wait(); return notices.map((n) => ({ ...n })); },
+    async markNoticesRead() { await wait(); notices.forEach((n) => { n.read_at ??= new Date().toISOString(); }); },
+    async events() { await wait(); return events.filter((e) => e.active).map((e) => ({ ...e })); },
+    async createEvent(e) { await wait(); events.push({ ...e, id: 'e' + Date.now(), creator_id: me.id, active: true, going: 1, me_going: true }); },
+    async joinEvent(id) { await wait(); const e = events.find((x) => x.id === id)!; if (e.capacity && e.going >= e.capacity) throw new Error('Ya no quedan plazas'); e.going += 1; e.me_going = true; },
+    async leaveEvent(id) { await wait(); const e = events.find((x) => x.id === id)!; e.going -= 1; e.me_going = false; },
+    async cancelEvent(id) { await wait(); const e = events.find((x) => x.id === id); if (e) e.active = false; },
     async shops() { await wait(); return shops.map((s) => ({ ...s })); },
     async liveOffers() { await wait(); return offers.filter((o) => isLive(o) && !muted.has(o.shop_id)).map((o) => ({ ...o })); },
     async liveMenus() { await wait(); return menus.filter((m) => m.active && m.qty_left > 0 && !muted.has(m.shop_id)).map((m) => ({ ...m })); },
@@ -159,7 +177,8 @@ function liveRepo(): Repo {
   const repo: Repo = {
     mode: 'live',
     async me() {
-      const rows = ok(await sb.from('profiles').select('display_name, verified_at, shops:verified_by_shop(name)').eq('id', await uid()).limit(1));
+      const id = await uid();
+      const rows = ok(await sb.from('profiles').select('display_name, verified_at, fase2, shops:verified_by_shop(name)').eq('id', id).limit(1));
       const p = (rows as any[])[0];
       if (!p) {
         // Si dio su nombre al crear la cuenta, el perfil se crea aquí, también tras confirmar el correo.
@@ -167,14 +186,50 @@ function liveRepo(): Repo {
         const name = String(data.user?.user_metadata?.display_name ?? '').trim();
         if (!name) return null;
         await repo.createProfile(name);
-        return { name, verified: false, verifiedBy: null };
+        return { id, name, verified: false, verifiedBy: null, fase2: false };
       }
-      return { name: p.display_name, verified: !!p.verified_at, verifiedBy: p.shops?.name ?? null };
+      return { id, name: p.display_name, verified: !!p.verified_at, verifiedBy: p.shops?.name ?? null, fase2: !!p.fase2 };
     },
     async createProfile(name) {
       ok(await sb.from('profiles').upsert({ id: await uid(), display_name: name.trim(), street: 'General Lacy' }, { onConflict: 'id', ignoreDuplicates: true }));
     },
     async signOut() { shopCache = null; selected = null; await sb.auth.signOut(); },
+    async requestDeletion() { ok(await sb.rpc('request_account_deletion')); },
+    async exportMyData() {
+      const id = await uid();
+      const [perfil, reservas, menus, eventos, avisos] = await Promise.all([
+        sb.from('profiles').select('display_name, street, verified_at, verify_method, created_at').eq('id', id).then(ok),
+        sb.from('reservations').select('created_at, qty, status, mode, delivery_slot, offers(title), shops(name)').eq('neighbour_id', id).then(ok),
+        sb.from('menu_reservations').select('created_at, qty, status, mode, at_time, shops(name)').eq('neighbour_id', id).then(ok),
+        sb.from('event_attendees').select('created_at, events(title, starts_at)').eq('user_id', id).then(ok),
+        sb.from('notifications').select('created_at, title, body').eq('user_id', id).then(ok),
+      ]);
+      return JSON.stringify({ exportado: new Date().toISOString(), perfil, reservas, menus, eventos, avisos }, null, 2);
+    },
+    async notices() {
+      return ok(await sb.from('notifications').select('id, kind, title, body, created_at, read_at').eq('user_id', await uid()).order('created_at', { ascending: false }).limit(50)) as Notice[];
+    },
+    async markNoticesRead() { ok(await sb.from('notifications').update({ read_at: new Date().toISOString() }).eq('user_id', await uid()).is('read_at', null)); },
+    async events() {
+      const id = await uid();
+      const rows = ok(await sb.from('events').select('id, creator_id, shop_id, title, category, starts_at, place, capacity, price_text, description, kids, active, shops(name)').eq('active', true).gt('starts_at', new Date(Date.now() - 6 * 3600 * 1000).toISOString()).order('starts_at')) as any[];
+      if (rows.length === 0) return [];
+      const ids = rows.map((r) => r.id);
+      const [counts, mineRows] = await Promise.all([
+        sb.rpc('event_counts', { ids }).then(ok) as Promise<{ event_id: string; going: number }[]>,
+        sb.from('event_attendees').select('event_id').eq('user_id', id).in('event_id', ids).then(ok) as Promise<{ event_id: string }[]>,
+      ]);
+      const mineSet = new Set(mineRows.map((m) => m.event_id));
+      return rows.map((r) => ({ ...r, shop_name: r.shops?.name, going: counts.find((c) => c.event_id === r.id)?.going ?? 0, me_going: mineSet.has(r.id) }));
+    },
+    async createEvent(e) {
+      const id = await uid();
+      const created = ok(await sb.from('events').insert({ ...e, creator_id: id }).select('id').single()) as { id: string };
+      ok(await sb.from('event_attendees').insert({ event_id: created.id, user_id: id }));
+    },
+    async joinEvent(eventId) { ok(await sb.from('event_attendees').insert({ event_id: eventId, user_id: await uid() })); },
+    async leaveEvent(eventId) { ok(await sb.from('event_attendees').delete().eq('event_id', eventId).eq('user_id', await uid())); },
+    async cancelEvent(eventId) { ok(await sb.from('events').update({ active: false }).eq('id', eventId)); },
     async shops() {
       return ok(await sb.from('shops').select(SHOP_COLS).eq('active', true).order('name')) as Shop[];
     },

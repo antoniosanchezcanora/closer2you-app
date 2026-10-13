@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { Calle } from '../components/art';
 import { ReserveSheet, ReserveTarget } from '../components/ReserveSheet';
-import { Badge, Button, Card, Initial, Label, Note, T } from '../components/ui';
+import { Badge, Button, Card, Initial, Label, Note, Segment, T } from '../components/ui';
+import Agenda from './Agenda';
 import { repo } from '../lib/repo';
 import type { Me, Menu, MenuReservation, Offer, Reservation, ReservationStatus, Shop } from '../lib/types';
 import { colors, eur, hhmm } from '../theme';
@@ -26,7 +28,8 @@ export function offerBadge(o: Offer) {
 
 type Group = { shopId: string; shopName?: string; latest: string; offers: Offer[]; menu?: Menu };
 
-export default function VecinoHoy({ me, onVerified, onSignOut, onOpenShop }: { me: Me | null; onVerified: () => void; onSignOut: () => void; onOpenShop: (shopId: string) => void }) {
+export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, onOpenShop }: { me: Me | null; myShop: Shop | null; unread: number; onVerified: () => void; onAvisos: () => void; onOpenShop: (shopId: string) => void }) {
+  const [seg, setSeg] = useState<'hoy' | 'agenda'>('hoy');
   const { width } = useWindowDimensions();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -92,11 +95,11 @@ export default function VecinoHoy({ me, onVerified, onSignOut, onOpenShop }: { m
             <Text style={T.title}>General Lacy</Text>
             {verified && me?.verifiedBy ? <Badge label={`Verificado por ${me.verifiedBy}`} color={colors.green} soft={colors.greenSoft} /> : null}
           </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={unread ? `Avisos, ${unread} sin leer` : 'Avisos'} onPress={onAvisos} style={st.bell}>
+            <Svg width={24} height={24} viewBox="0 0 24 24"><Path d="M7 16 V11 A5 5 0 0 1 17 11 V16 L18.5 17.5 H5.5 Z M10.5 19.5 A1.6 1.6 0 0 0 13.5 19.5" fill="none" stroke={colors.ink} strokeWidth={1.9} strokeLinejoin="round" /></Svg>
+            {unread > 0 && <View style={st.bellDot}><Text style={st.bellNum}>{unread > 9 ? '9+' : unread}</Text></View>}
+          </Pressable>
           {me ? <Initial name={me.name} size={44} /> : null}
-          <Button small label="Salir" tone="soft" onPress={() => Alert.alert('Salir', '¿Cerrar la sesión en este móvil?', [
-            { text: 'Cancelar', style: 'cancel' },
-            { text: 'Salir', onPress: onSignOut },
-          ])} />
         </View>
 
         <View style={st.street}>
@@ -149,8 +152,9 @@ export default function VecinoHoy({ me, onVerified, onSignOut, onOpenShop }: { m
           </>
         )}
 
-        {verified && <Label>Hoy en tu calle</Label>}
-        {groups.map((g) => {
+        {verified && <Segment items={[{ id: 'hoy', label: 'Hoy en tu calle' }, { id: 'agenda', label: 'Agenda del barrio' }]} value={seg} onChange={setSeg} />}
+        {seg === 'agenda' && <Agenda me={me} shop={myShop} />}
+        {seg === 'hoy' && groups.map((g) => {
           const shop = shopById(g.shopId);
           return (
             <Card key={g.shopId} style={{ gap: 0, paddingVertical: 6 }}>
@@ -195,7 +199,7 @@ export default function VecinoHoy({ me, onVerified, onSignOut, onOpenShop }: { m
           );
         })}
 
-        {verified && !loading && (
+        {seg === 'hoy' && verified && !loading && (
           <View style={st.done}>
             <Text style={T.h2}>{groups.length === 0 ? 'Hoy todavía no hay nada' : 'Ya estás al día'}</Text>
             <Text style={[T.small, { textAlign: 'center' }]}>{groups.length === 0 ? 'Las tiendas suelen publicar por la tarde. Mira la pestaña Tiendas.' : 'Esto es todo lo que ha pasado hoy en tu calle. Mañana habrá más.'}</Text>
@@ -240,6 +244,9 @@ const st = StyleSheet.create({
   price: { fontSize: 19, fontWeight: '700', color: colors.ink },
   mute: { alignSelf: 'flex-end', fontSize: 13, color: colors.faint, paddingVertical: 8 },
   done: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#C9CDD3', borderRadius: 16, padding: 20, alignItems: 'center', gap: 6, marginTop: 4 },
+  bell: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  bellDot: { position: 'absolute', right: -2, top: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  bellNum: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
   codeBox: { backgroundColor: colors.card, borderRadius: 14, padding: 14, gap: 4, alignItems: 'center' },
   code: { fontSize: 30, fontWeight: '700', letterSpacing: 2, color: colors.ink },
 });

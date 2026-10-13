@@ -7,16 +7,20 @@ import { Button, Segment, T } from './src/components/ui';
 import { repo } from './src/lib/repo';
 import { supabase } from './src/lib/supabase';
 import type { Me, Shop } from './src/lib/types';
+import Avisos from './src/screens/Avisos';
 import Login from './src/screens/Login';
+import Perfil from './src/screens/Perfil';
 import TiendaAjustes from './src/screens/TiendaAjustes';
 import TiendaHoy from './src/screens/TiendaHoy';
 import TiendaMenu from './src/screens/TiendaMenu';
 import TiendaOferta from './src/screens/TiendaOferta';
 import Tiendas from './src/screens/Tiendas';
 import VecinoHoy from './src/screens/VecinoHoy';
+import Vecinos from './src/screens/Vecinos';
 import { colors } from './src/theme';
 
-type Tab = 'calle' | 'tiendas' | 'tienda' | 'oferta' | 'ajustes';
+// Modo vecino: Mi calle, Tiendas, Vecinos, Perfil. Modo tienda (se abre desde Perfil): Reservas, Publicar, Ajustes.
+type Tab = 'calle' | 'tiendas' | 'vecinos' | 'perfil' | 'avisos' | 'tienda' | 'oferta' | 'ajustes';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('calle');
@@ -26,7 +30,13 @@ export default function App() {
   const [myShop, setMyShop] = useState<Shop | null>(null);
   const [openShop, setOpenShop] = useState<string | null>(null);
   const [publish, setPublish] = useState<'menu' | 'oferta'>('menu');
+  const [shopMode, setShopMode] = useState(false);
+  const [unread, setUnread] = useState(0);
   const hasShop = !!myShop;
+
+  const refreshUnread = useCallback(async () => {
+    try { setUnread((await repo.notices()).filter((n) => !n.read_at).length); } catch { /* sin avisos no pasa nada */ }
+  }, []);
 
   useEffect(() => {
     if (!supabase) return;
@@ -40,16 +50,27 @@ export default function App() {
       const [m, shop] = await Promise.all([repo.me(), repo.myShop()]);
       setMe(m);
       setMyShop(shop);
+      refreshUnread();
     } catch (e: any) {
       setMe(null);
       Alert.alert('No se ha podido cargar tu perfil', e.message);
     }
-  }, []);
+  }, [refreshUnread]);
 
   useEffect(() => {
     if (signedIn) loadMe();
-    else { setMe(undefined); setMyShop(null); setTab('calle'); setOpenShop(null); }
+    else { setMe(undefined); setMyShop(null); setTab('calle'); setOpenShop(null); setShopMode(false); setUnread(0); }
   }, [signedIn, loadMe]);
+
+  // Los avisos nuevos llegan al momento mientras la app está abierta.
+  useEffect(() => {
+    if (!supabase || !signedIn) return;
+    const ch = supabase.channel('avisos').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => refreshUnread()).subscribe();
+    return () => { supabase?.removeChannel(ch); };
+  }, [signedIn, refreshUnread]);
+
+  const signOut = () => { repo.signOut().catch((e: any) => Alert.alert('Error', e.message)); };
+  const go = (t: Tab) => { setTab(t); if (t === 'tiendas') setOpenShop(null); };
 
   return (
     <SafeAreaProvider>
@@ -63,11 +84,14 @@ export default function App() {
         ) : (
           <>
             <View style={{ flex: 1 }}>
-              {tab === 'calle' && <VecinoHoy me={me ?? null} onVerified={loadMe} onSignOut={() => { repo.signOut().catch((e: any) => Alert.alert('Error', e.message)); }} onOpenShop={(id) => { setOpenShop(id); setTab('tiendas'); }} />}
-              {tab === 'tiendas' && <Tiendas verified={!!me?.verified} openShopId={openShop} onOpenShop={setOpenShop} onCloseShop={() => setOpenShop(null)} />}
-              {tab === 'tienda' && hasShop && <TiendaHoy onNewOffer={() => setTab('oferta')} onSettings={() => setTab('ajustes')} onShopChange={loadMe} />}
-              {tab === 'ajustes' && hasShop && <TiendaAjustes onDone={() => { loadMe(); setTab('tienda'); }} />}
-              {tab === 'oferta' && hasShop && myShop && (
+              {!shopMode && tab === 'calle' && <VecinoHoy me={me ?? null} myShop={myShop} unread={unread} onVerified={loadMe} onAvisos={() => go('avisos')} onOpenShop={(id) => { setOpenShop(id); setTab('tiendas'); }} />}
+              {!shopMode && tab === 'tiendas' && <Tiendas verified={!!me?.verified} openShopId={openShop} onOpenShop={setOpenShop} onCloseShop={() => setOpenShop(null)} />}
+              {!shopMode && tab === 'vecinos' && <Vecinos me={me ?? null} />}
+              {!shopMode && tab === 'perfil' && <Perfil me={me ?? null} shop={myShop} unread={unread} onAvisos={() => go('avisos')} onShopMode={() => { setShopMode(true); setTab('tienda'); }} onSignOut={signOut} />}
+              {!shopMode && tab === 'avisos' && <Avisos onBack={() => go('calle')} onRead={() => setUnread(0)} />}
+              {shopMode && tab === 'tienda' && hasShop && <TiendaHoy onNewOffer={() => setTab('oferta')} onSettings={() => setTab('ajustes')} onShopChange={loadMe} />}
+              {shopMode && tab === 'ajustes' && hasShop && <TiendaAjustes onDone={() => { loadMe(); setTab('tienda'); }} />}
+              {shopMode && tab === 'oferta' && hasShop && myShop && (
                 myShop.tipo === 'restaurante' ? (
                   <View style={{ flex: 1 }}>
                     <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
@@ -78,12 +102,21 @@ export default function App() {
                 ) : <TiendaOferta onDone={() => setTab('tienda')} />
               )}
             </View>
-            <View style={st.nav} accessibilityRole="tablist">
-              <NavItem label="Mi calle" icon="calle" on={tab === 'calle'} onPress={() => setTab('calle')} />
-              <NavItem label="Tiendas" icon="tiendas" on={tab === 'tiendas'} onPress={() => { setOpenShop(null); setTab('tiendas'); }} />
-              {hasShop && <NavItem label={myShop?.tipo === 'restaurante' ? 'Mi bar' : 'Mi tienda'} icon="mitienda" on={tab === 'tienda' || tab === 'ajustes'} onPress={() => setTab('tienda')} />}
-              {hasShop && <NavItem label="Publicar" icon="publicar" on={tab === 'oferta'} onPress={() => setTab('oferta')} />}
-            </View>
+            {shopMode ? (
+              <View style={st.nav} accessibilityRole="tablist">
+                <NavItem label="Reservas" icon="mitienda" on={tab === 'tienda'} onPress={() => setTab('tienda')} color={myShop?.tipo === 'restaurante' ? colors.wine : colors.green} />
+                <NavItem label="Publicar" icon="publicar" on={tab === 'oferta'} onPress={() => setTab('oferta')} color={myShop?.tipo === 'restaurante' ? colors.wine : colors.green} />
+                <NavItem label="Ajustes" icon="ajustes" on={tab === 'ajustes'} onPress={() => setTab('ajustes')} color={myShop?.tipo === 'restaurante' ? colors.wine : colors.green} />
+                <NavItem label="Modo vecino" icon="salir" on={false} onPress={() => { setShopMode(false); setTab('perfil'); }} />
+              </View>
+            ) : (
+              <View style={st.nav} accessibilityRole="tablist">
+                <NavItem label="Mi calle" icon="calle" on={tab === 'calle' || tab === 'avisos'} onPress={() => go('calle')} />
+                <NavItem label="Tiendas" icon="tiendas" on={tab === 'tiendas'} onPress={() => go('tiendas')} />
+                <NavItem label="Vecinos" icon="vecinos" on={tab === 'vecinos'} onPress={() => go('vecinos')} />
+                <NavItem label="Perfil" icon="perfil" on={tab === 'perfil'} onPress={() => go('perfil')} badge={unread} />
+              </View>
+            )}
           </>
         )}
       </SafeAreaView>
@@ -122,13 +155,20 @@ const ICONS = {
   tiendas: 'M4 9 L5.5 4.5 H18.5 L20 9 Z M5 9 V20 H19 V9 M10 20 V15 H14 V20',
   mitienda: 'M6 8.5 H18 L17 20 H7 Z M9 8.5 V7 A3 3 0 0 1 15 7 V8.5',
   publicar: 'M4.5 12 L12 4.5 H19.5 V12 L12 19.5 Z M15.5 8.5 h.01',
+  vecinos: 'M9 11 A3 3 0 1 0 9 5 A3 3 0 1 0 9 11 Z M3.5 20 Q3.5 14 9 14 Q14.5 14 14.5 20 M16 11 A2.4 2.4 0 1 0 16 6.2 M17 14 Q20.5 14.5 20.5 19',
+  perfil: 'M12 12 A4 4 0 1 0 12 4 A4 4 0 1 0 12 12 Z M4.5 20.5 Q4.5 14.5 12 14.5 Q19.5 14.5 19.5 20.5',
+  ajustes: 'M5 7 H19 M5 12 H19 M5 17 H19 M9 5 V9 M15 10 V14 M11 15 V19',
+  salir: 'M14 5 H19 V19 H14 M10 8 L6 12 L10 16 M6 12 H16',
 } as const;
 
-function NavItem({ label, icon, on, onPress }: { label: string; icon: keyof typeof ICONS; on: boolean; onPress: () => void }) {
-  const c = on ? colors.green : colors.faint;
+function NavItem({ label, icon, on, onPress, color = colors.green, badge = 0 }: { label: string; icon: keyof typeof ICONS; on: boolean; onPress: () => void; color?: string; badge?: number }) {
+  const c = on ? color : colors.faint;
   return (
-    <Pressable accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }} onPress={onPress} style={st.navItem}>
-      <Svg width={24} height={24} viewBox="0 0 24 24"><Path d={ICONS[icon]} fill="none" stroke={c} strokeWidth={1.9} strokeLinejoin="round" strokeLinecap="round" /></Svg>
+    <Pressable accessibilityRole="tab" accessibilityLabel={badge ? `${label}, ${badge} avisos sin leer` : label} accessibilityState={{ selected: on }} onPress={onPress} style={st.navItem}>
+      <View>
+        <Svg width={24} height={24} viewBox="0 0 24 24"><Path d={ICONS[icon]} fill="none" stroke={c} strokeWidth={1.9} strokeLinejoin="round" strokeLinecap="round" /></Svg>
+        {badge > 0 && <View style={st.badge} />}
+      </View>
       <Text style={[st.navText, { color: c }]}>{label}</Text>
     </Pressable>
   );
@@ -140,6 +180,7 @@ const st = StyleSheet.create({
   nav: { flexDirection: 'row', backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: '#E4E6E9', paddingTop: 8, paddingBottom: 4 },
   navItem: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', gap: 4 },
   navText: { fontSize: 12, fontWeight: '600', color: colors.faint },
+  badge: { position: 'absolute', right: -3, top: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.red, borderWidth: 2, borderColor: colors.card },
   setup: { flex: 1, padding: 24, gap: 12, justifyContent: 'center' },
   input: { minHeight: 50, borderRadius: 12, backgroundColor: colors.card, paddingHorizontal: 14, fontSize: 16, color: colors.ink, borderWidth: 1, borderColor: '#D5D9DE' },
 });

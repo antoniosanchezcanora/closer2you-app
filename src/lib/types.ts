@@ -4,10 +4,41 @@ export type PriorPriceBasis = 'minimo_30_dias' | 'proximo_a_caducar';
 export type ReservationStatus = 'nueva' | 'lista' | 'recogida' | 'rechazada' | 'cancelada' | 'no_show';
 
 export type Me = {
+  id: string;
   name: string;
   verified: boolean;
   verifiedBy: string | null; // nombre de la tienda que te verificó
+  fase2: boolean; // acceso de prueba a la Fase 2 (lo activamos nosotros)
 };
+
+export type Notice = {
+  id: string;
+  kind: 'reserva' | 'tienda' | 'verificado' | 'evento' | 'sistema';
+  title: string;
+  body: string | null;
+  created_at: string;
+  read_at: string | null;
+};
+
+export type EventCategory = 'deporte' | 'cultura' | 'ninos' | 'mayores' | 'barrio';
+export type BarrioEvent = {
+  id: string;
+  creator_id: string;
+  shop_id: string | null;
+  shop_name?: string;
+  title: string;
+  category: EventCategory;
+  starts_at: string;
+  place: string;
+  capacity: number | null;
+  price_text: string;
+  description: string | null;
+  kids: boolean;
+  active: boolean;
+  going: number;
+  me_going: boolean;
+};
+export type NewEvent = Pick<BarrioEvent, 'title' | 'category' | 'starts_at' | 'place' | 'capacity' | 'price_text' | 'description' | 'kids' | 'shop_id'> & { kids_certified: boolean };
 
 export type Fachada = 'fruta' | 'pan' | 'libros' | 'bar' | 'otra';
 
@@ -140,6 +171,17 @@ export interface Repo {
   me(): Promise<Me | null>;
   createProfile(name: string): Promise<void>;
   signOut(): Promise<void>;
+  requestDeletion(): Promise<void>;
+  exportMyData(): Promise<string>;
+  // avisos
+  notices(): Promise<Notice[]>;
+  markNoticesRead(): Promise<void>;
+  // agenda
+  events(): Promise<BarrioEvent[]>;
+  createEvent(e: NewEvent): Promise<void>;
+  joinEvent(id: string): Promise<void>;
+  leaveEvent(id: string): Promise<void>;
+  cancelEvent(id: string): Promise<void>;
   // vecino
   shops(): Promise<Shop[]>;
   liveOffers(): Promise<Offer[]>;
