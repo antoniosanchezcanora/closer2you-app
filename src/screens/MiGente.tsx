@@ -41,27 +41,34 @@ export default function MiGente({ me }: { me: Me }) {
   // Recorrido visto mientras miras la pantalla (solo en este móvil, no se guarda)
   const [trails, setTrails] = useState<Record<string, { lat: number; lng: number }[]>>({});
 
+  const applyWalks = useCallback((w: Walk[]) => {
+    setWalks(w);
+    setTrails((prev) => {
+      const next: Record<string, { lat: number; lng: number }[]> = {};
+      w.forEach((x) => {
+        const t = prev[x.id] ?? [];
+        if (x.lat != null && x.lng != null) {
+          const last = t[t.length - 1];
+          next[x.id] = last && last.lat === x.lat && last.lng === x.lng ? t : [...t, { lat: x.lat, lng: x.lng }].slice(-300);
+        } else next[x.id] = t;
+      });
+      return next;
+    });
+  }, []);
+  const refreshWalks = useCallback(async () => {
+    try { applyWalks(await repo.walks()); } catch { /* se reintenta en el siguiente ciclo */ }
+  }, [applyWalks]);
+
   const load = useCallback(async () => {
     try {
       const [p, a, w, pr] = await Promise.all([repo.people(), repo.careAlerts(), repo.walks(), repo.myPresence()]);
-      setPeople(p); setAlerts(a); setWalks(w); setPresence(pr);
-      setTrails((prev) => {
-        const next: Record<string, { lat: number; lng: number }[]> = {};
-        w.forEach((x) => {
-          const t = prev[x.id] ?? [];
-          if (x.lat != null && x.lng != null) {
-            const last = t[t.length - 1];
-            next[x.id] = last && last.lat === x.lat && last.lng === x.lng ? t : [...t, { lat: x.lat, lng: x.lng }].slice(-200);
-          } else next[x.id] = t;
-        });
-        return next;
-      });
+      setPeople(p); setAlerts(a); setPresence(pr); applyWalks(w);
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyWalks]);
   useEffect(() => { Promise.resolve().then(load); }, [load]);
 
   // Al momento mientras la app está abierta: avisos de ayuda, vueltas a casa e invitaciones.
@@ -70,11 +77,21 @@ export default function MiGente({ me }: { me: Me }) {
     if (!supabase) return () => clearInterval(t);
     const ch = supabase.channel('migente')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'care_alerts' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'walks' }, () => load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'walks' }, () => load())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'walks' }, () => refreshWalks())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trust_links' }, () => load())
       .subscribe();
     return () => { clearInterval(t); supabase?.removeChannel(ch); };
-  }, [load]);
+  }, [load, refreshWalks]);
+
+  // Mientras alguien vuelve a casa, la posición se pide cada 4 segundos además del aviso en vivo,
+  // por si la conexión en tiempo real se corta (pasa al cambiar de wifi a datos).
+  const following = walks.some((w) => w.status === 'activa');
+  useEffect(() => {
+    if (!following) return;
+    const t = setInterval(refreshWalks, 4000);
+    return () => clearInterval(t);
+  }, [following, refreshWalks]);
 
   const run = async (f: () => Promise<void>, ok?: string) => {
     try { await f(); if (ok) Alert.alert(ok); load(); } catch (e: any) { Alert.alert('No se ha podido', e.message); }
@@ -281,9 +298,9 @@ function VueltaCasa({ me, walk, people, onClose }: { me: Me; walk: Walk | null; 
       const perm = await Location.requestForegroundPermissionsAsync();
       if (perm.status !== 'granted') { setGps('denied'); return; }
       stopGps();
-      sub.current = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, distanceInterval: 25, timeInterval: 20000 }, (loc) => {
+      sub.current = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 3000 }, (loc) => {
         const t = loc.timestamp || nowMs();
-        if (t - last.current < 15000) return;
+        if (t - last.current < 3000) return;
         last.current = t;
         repo.updateWalk(loc.coords.latitude, loc.coords.longitude).catch(() => {});
       });
