@@ -33,8 +33,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Stoop usa tus fotos solo si eliges una para la imagen de tu tienda.",
-          "cameraPermission": "Stoop usa la cámara solo si haces una foto de la fachada de tu tienda.",
+          "photosPermission": "Stoop usa tus fotos solo si eliges una: la imagen de tu tienda o la factura o el DNI con los que te verificas, que se borran al revisarlos.",
+          "cameraPermission": "Stoop usa la cámara solo si haces una foto: la fachada de tu tienda o la factura o el DNI con los que te verificas, que se borran al revisarlos.",
           "microphonePermission": false
         }
       ]

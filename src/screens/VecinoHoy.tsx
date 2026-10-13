@@ -6,6 +6,7 @@ import { ReserveSheet, ReserveTarget } from '../components/ReserveSheet';
 import { Badge, Button, Card, Initial, Label, Note, Segment, T } from '../components/ui';
 import Agenda from './Agenda';
 import { repo } from '../lib/repo';
+import { VerificarDocumento } from './Verificar';
 import type { Me, Menu, MenuReservation, Offer, PresencePerson, Reservation, ReservationStatus, Shop } from '../lib/types';
 import { colors, eur, hhmm } from '../theme';
 
@@ -160,6 +161,7 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
             ) : (
               <Button label="Pedir mi código" onPress={askCode} />
             )}
+            <VerificarDocumento />
           </Card>
         )}
 

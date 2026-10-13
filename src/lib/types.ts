@@ -218,6 +218,9 @@ export type Person = {
   last_ok_at: string | null;
 };
 export type CareAlert = { id: string; user_id: string; user_name: string; status: 'abierta' | 'atendida' | 'cerrada'; responder_name: string | null; created_at: string; my_answer: 'voy' | 'no_puedo' | null };
+export type IdMethod = 'factura' | 'dni';
+export type IdCheck = { id: string; method: IdMethod; status: 'pendiente' | 'aprobada' | 'rechazada' | 'retirada'; reason: string | null; created_at: string };
+export type PendingIdCheck = { id: string; user_id: string; name: string; method: IdMethod; path: string; created_at: string };
 export type DiscreetPerson = { id: string; name: string };
 export type DiscreetAlert = { id: string; owner_id: string; name: string; lat: number | null; lng: number | null; created_at: string; called_at: string | null; others_called: string | null };
 export type Walk = { id: string; user_id: string; user_name: string; status: 'activa' | 'llegado' | 'cancelada'; eta_at: string; lat: number | null; lng: number | null; pos_at: string | null; created_at: string; ended_at: string | null };
@@ -336,6 +339,14 @@ export interface Repo {
   imOk(): Promise<void>;
   setAwake(minutes: number): Promise<void>;
   askHelp(): Promise<void>;
+  // Verificación con factura o DNI (la revisa el equipo de Stoop y la foto se borra)
+  myIdCheck(): Promise<IdCheck | null>;
+  sendIdCheck(method: IdMethod, uri: string): Promise<void>;
+  cancelIdCheck(id: string): Promise<void>;
+  isAdmin(): Promise<boolean>;
+  pendingIdChecks(): Promise<PendingIdCheck[]>;
+  idPhotoUrl(path: string): Promise<string>;
+  reviewIdCheck(id: string, approve: boolean, reason?: string): Promise<void>;
   // Aviso discreto: a una o dos personas, sin rastro en el móvil de quien lo envía
   myDiscreetContacts(): Promise<DiscreetPerson[]>;
   setDiscreetContacts(ids: string[]): Promise<void>;

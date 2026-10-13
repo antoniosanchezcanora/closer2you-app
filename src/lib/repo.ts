@@ -1,7 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { Appointment, DiscreetAlert, AwakeSchedule, ChatGroup, GroupMessage, PresencePerson, ShopMessage, ShopRequestStatus, ShopThread, TableBooking, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
+import type { Appointment, DiscreetAlert, IdCheck, PendingIdCheck, AwakeSchedule, ChatGroup, GroupMessage, PresencePerson, ShopMessage, ShopRequestStatus, ShopThread, TableBooking, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
@@ -85,6 +85,7 @@ function demoRepo(): Repo {
   ];
   let selected = 's1';
   let discreet: string[] = ['u7'];
+  let idCheck: IdCheck | null = null;
   const discreetInbox: DiscreetAlert[] = [];
   const people: Person[] = [
     { link_id: 'l1', other_id: 'u5', name: 'Lucía', status: 'aceptada', i_sent: true, neighbour: true, i_share_vuelvo: true, i_share_cuidado: true, they_share_vuelvo: true, they_share_cuidado: true, awake: true, last_ok_at: null },
@@ -208,6 +209,13 @@ function demoRepo(): Repo {
     },
     async imOk() { await wait(); presence.last_ok_at = new Date().toISOString(); },
     async setAwake(minutes) { await wait(); presence.awake_until = minutes > 0 ? new Date(Date.now() + minutes * 60000).toISOString() : null; },
+    async myIdCheck() { await wait(); return idCheck ? { ...idCheck } : null; },
+    async sendIdCheck(method) { await wait(); idCheck = { id: 'ic' + Date.now(), method, status: 'pendiente', reason: null, created_at: new Date().toISOString() }; },
+    async cancelIdCheck() { await wait(); if (idCheck) idCheck.status = 'retirada'; },
+    async isAdmin() { await wait(); return false; },
+    async pendingIdChecks() { await wait(); return []; },
+    async idPhotoUrl() { await wait(); return ''; },
+    async reviewIdCheck() { await wait(); },
     async myDiscreetContacts() { await wait(); return discreet.map((id) => ({ id, name: people.find((p) => p.other_id === id)?.name ?? 'Vecino' })); },
     async setDiscreetContacts(ids) { await wait(); if (ids.length > 2) throw new Error('Elige como mucho a dos personas'); discreet = [...new Set(ids)]; },
     async discreetForMe() { await wait(); return [{ id: 'u5', name: 'Lucía' }]; },
@@ -513,6 +521,37 @@ function liveRepo(): Repo {
     async imOk() { ok(await sb.rpc('i_am_ok')); },
     async setAwake(minutes) { ok(await sb.rpc('set_awake', { p_minutes: minutes })); },
     async askHelp() { ok(await sb.rpc('ask_help')); },
+    async myIdCheck() { const rows = (ok(await sb.rpc('my_id_check')) as any[]) ?? []; return (rows[0] as IdCheck) ?? null; },
+    async sendIdCheck(method, uri) {
+      // Se reduce a 1600 px: se lee bien una factura o un DNI y pesa poco. Carpeta privada con el id del vecino.
+      const ctx = ImageManipulator.manipulate(uri);
+      ctx.resize({ width: 1600, height: null });
+      const img = await (await ctx.renderAsync()).saveAsync({ format: SaveFormat.JPEG, compress: 0.75 });
+      const body = await (await fetch(img.uri)).arrayBuffer();
+      const path = `${await uid()}/${Date.now()}.jpg`;
+      const up = await sb.storage.from('verificaciones').upload(path, body, { contentType: 'image/jpeg', upsert: false });
+      if (up.error) throw new Error(up.error.message);
+      const r = await sb.rpc('request_id_check', { p_method: method, p_path: path });
+      if (r.error) { await sb.storage.from('verificaciones').remove([path]); throw new Error(r.error.message); }
+    },
+    async cancelIdCheck(id) {
+      const path = ok(await sb.rpc('cancel_id_check', { p_id: id })) as string;
+      const rm = await sb.storage.from('verificaciones').remove([path]);
+      if (!rm.error) await sb.rpc('mark_id_file_removed', { p_id: id });
+    },
+    async isAdmin() { const rows = (ok(await sb.from('stoop_admins').select('user_id').eq('user_id', await uid()).limit(1)) as any[]) ?? []; return rows.length > 0; },
+    async pendingIdChecks() { return ((ok(await sb.rpc('pending_id_checks')) as any[]) ?? []) as PendingIdCheck[]; },
+    async idPhotoUrl(path) {
+      const r = await sb.storage.from('verificaciones').createSignedUrl(path, 120);
+      if (r.error) throw new Error(r.error.message);
+      return r.data.signedUrl;
+    },
+    async reviewIdCheck(id, approve, reason) {
+      const path = ok(await sb.rpc('review_id_check', { p_id: id, p_approve: approve, p_reason: reason ?? null })) as string;
+      const rm = await sb.storage.from('verificaciones').remove([path]);
+      if (rm.error) throw new Error('Revisado, pero no se ha podido borrar la foto: ' + rm.error.message);
+      await sb.rpc('mark_id_file_removed', { p_id: id });
+    },
     async myDiscreetContacts() { return ((ok(await sb.rpc('my_discreet_contacts')) as any[]) ?? []).map((r) => ({ id: r.contact_id, name: r.name })); },
     async setDiscreetContacts(ids) { ok(await sb.rpc('set_discreet_contacts', { p_ids: ids })); },
     async discreetForMe() { return ((ok(await sb.rpc('discreet_for_me')) as any[]) ?? []).map((r) => ({ id: r.owner_id, name: r.name })); },

@@ -22,11 +22,12 @@ import Mensajes from './src/screens/Mensajes';
 import TiendaMensajes from './src/screens/TiendaMensajes';
 import Vecinos, { LoMio } from './src/screens/Vecinos';
 import Emergencias from './src/screens/Emergencias';
+import { RevisarVerificaciones } from './src/screens/Verificar';
 import { colors } from './src/theme';
 
 // Modo vecino: Mi calle, Vecinos, Mensajes, Perfil (el directorio de tiendas se abre desde La plaza).
 // Modo tienda (se abre desde Perfil): Reservas, Publicar, Mensajes, Ajustes.
-type Tab = 'calle' | 'tiendas' | 'vecinos' | 'mensajes' | 'perfil' | 'avisos' | 'servicio' | 'alta' | 'lomio' | 'emergencias' | 'tienda' | 'oferta' | 'tmensajes' | 'ajustes';
+type Tab = 'calle' | 'tiendas' | 'vecinos' | 'mensajes' | 'perfil' | 'avisos' | 'servicio' | 'alta' | 'lomio' | 'emergencias' | 'revisar' | 'tienda' | 'oferta' | 'tmensajes' | 'ajustes';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('calle');
@@ -135,13 +136,19 @@ export default function App() {
                   <LoMio me={me} />
                 </View>
               )}
+              {!shopMode && tab === 'revisar' && me && (
+                <View style={{ flex: 1 }}>
+                  <View style={{ paddingHorizontal: 16, paddingTop: 8, flexDirection: 'row' }}><Button small label="‹ Perfil" tone="soft" onPress={() => setTab('perfil')} /></View>
+                  <RevisarVerificaciones />
+                </View>
+              )}
               {!shopMode && tab === 'emergencias' && me && (
                 <View style={{ flex: 1 }}>
                   <View style={{ paddingHorizontal: 16, paddingTop: 8, flexDirection: 'row' }}><Button small label="‹ Perfil" tone="soft" onPress={() => setTab('perfil')} /></View>
                   <Emergencias />
                 </View>
               )}
-              {!shopMode && tab === 'perfil' && <Perfil me={me ?? null} shop={myShop} unread={unread} onAvisos={() => go('avisos')} onShopMode={() => { setShopMode(true); setTab('tienda'); }} onServicio={fase2 ? () => setTab('servicio') : undefined} onAlta={() => setTab('alta')} onLoMio={fase2 ? () => setTab('lomio') : undefined} onEmergencias={fase2 ? () => setTab('emergencias') : undefined} onSignOut={signOut} />}
+              {!shopMode && tab === 'perfil' && <Perfil me={me ?? null} shop={myShop} unread={unread} onAvisos={() => go('avisos')} onShopMode={() => { setShopMode(true); setTab('tienda'); }} onServicio={fase2 ? () => setTab('servicio') : undefined} onAlta={() => setTab('alta')} onLoMio={fase2 ? () => setTab('lomio') : undefined} onEmergencias={fase2 ? () => setTab('emergencias') : undefined} onRevisar={() => setTab('revisar')} onSignOut={signOut} />}
               {!shopMode && tab === 'alta' && <AltaTienda onBack={() => setTab('perfil')} onDone={() => { loadMe(); setTab('perfil'); }} />}
               {!shopMode && tab === 'servicio' && <MiServicio onBack={() => setTab('perfil')} />}
               {!shopMode && tab === 'avisos' && <Avisos onBack={() => go('calle')} onRead={() => setUnread(0)} />}

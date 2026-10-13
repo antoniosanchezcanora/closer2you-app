@@ -5,9 +5,10 @@ import { repo } from '../lib/repo';
 import type { Me, Shop } from '../lib/types';
 import { colors } from '../theme';
 
-export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onAlta, onLoMio, onEmergencias, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onAlta: () => void; onLoMio?: () => void; onEmergencias?: () => void; onSignOut: () => void }) {
+export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onAlta, onLoMio, onEmergencias, onRevisar, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onAlta: () => void; onLoMio?: () => void; onEmergencias?: () => void; onRevisar?: () => void; onSignOut: () => void }) {
   const [stats, setStats] = useState({ reservas: 0, tiendas: 0 });
   const [loading, setLoading] = useState(true);
+  const [admin, setAdmin] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -21,6 +22,7 @@ export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServi
     }
   }, []);
   useEffect(() => { Promise.resolve().then(load); }, [load]);
+  useEffect(() => { repo.isAdmin().then(setAdmin).catch(() => {}); }, []);
 
   const exportar = async () => {
     try {
@@ -52,7 +54,7 @@ export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServi
         <Initial name={me?.name ?? 'T'} size={84} />
         <Text style={T.h1}>{me?.name}</Text>
         {me?.verified
-          ? <Badge label={`Verificado por ${me.verifiedBy ?? 'una tienda del barrio'}`} color={colors.green} soft={colors.greenSoft} />
+          ? <Badge label={`Verificado${me.verifiedBy ? ` por ${me.verifiedBy}` : ''}`} color={colors.green} soft={colors.greenSoft} />
           : <Badge label="Sin verificar" color={colors.gold} soft={colors.goldSoft} />}
       </View>
 
@@ -79,6 +81,13 @@ export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServi
           <View style={st.group}>
             <Row title="Ofrecer un servicio profesional" sub="Para autónomos del barrio. Te visitamos antes de aparecer." onPress={onServicio} />
           </View>
+        </>
+      )}
+
+      {admin && onRevisar && (
+        <>
+          <Label>Equipo de Stoop</Label>
+          <View style={st.group}><Row title="Revisar verificaciones" sub="Facturas y DNI enviados por vecinos" onPress={onRevisar} /></View>
         </>
       )}
 
