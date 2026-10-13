@@ -9,6 +9,7 @@ export type Me = {
   verified: boolean;
   verifiedBy: string | null; // nombre de la tienda que te verificó
   fase2: boolean; // acceso de prueba a la Fase 2 (lo activamos nosotros)
+  barrio: string;
 };
 
 export type Notice = {
@@ -58,6 +59,7 @@ export type Shop = {
   delivery_radius_m: number;
   delivery_slots: string[];
   delivery_by: string | null;
+  barrio: string;
 };
 
 // Lo que la tienda puede cambiar de su ficha y de su entrega.
@@ -247,6 +249,8 @@ export type Appointment = {
   created_at: string;
   reviewed: boolean;
 };
+export type ShopRequest = { name: string; tipo: 'tienda' | 'restaurante'; category: 'fruteria' | 'panaderia' | 'peluqueria' | 'carniceria' | 'pescaderia' | 'otra'; street: string; nif: string; independent: boolean; phone: string | null };
+export type ShopRequestStatus = ShopRequest & { id: string; status: 'pendiente' | 'aprobada' | 'rechazada'; created_at: string };
 export type Review = { id: string; stars: number; body: string | null; created_at: string; author_name: string };
 
 // Todo lo que la app necesita de los datos. Hay dos implementaciones:
@@ -312,6 +316,15 @@ export interface Repo {
   proAppointments(): Promise<Appointment[]>; // como profesional
   setAppointment(id: string, status: 'aceptada' | 'rechazada' | 'hecha' | 'cancelada'): Promise<void>;
   review(appointment: Appointment, stars: number, body: string): Promise<void>;
+  // Mi barrio: las tiendas que sigo
+  follows(): Promise<string[]>;
+  follow(shopId: string): Promise<void>;
+  unfollow(shopId: string): Promise<void>;
+  followerCounts(): Promise<Record<string, number>>;
+  // Alta de tiendas
+  claimShop(code: string): Promise<string>;
+  requestShop(r: ShopRequest): Promise<void>;
+  myShopRequest(): Promise<ShopRequestStatus | null>;
   // vecino
   shops(): Promise<Shop[]>;
   liveOffers(): Promise<Offer[]>;

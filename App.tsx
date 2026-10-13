@@ -7,6 +7,7 @@ import { Button, Segment, T } from './src/components/ui';
 import { repo } from './src/lib/repo';
 import { supabase } from './src/lib/supabase';
 import type { Me, Shop } from './src/lib/types';
+import AltaTienda from './src/screens/AltaTienda';
 import Avisos from './src/screens/Avisos';
 import Login from './src/screens/Login';
 import Perfil from './src/screens/Perfil';
@@ -21,7 +22,7 @@ import Vecinos from './src/screens/Vecinos';
 import { colors } from './src/theme';
 
 // Modo vecino: Mi calle, Tiendas, Vecinos, Perfil. Modo tienda (se abre desde Perfil): Reservas, Publicar, Ajustes.
-type Tab = 'calle' | 'tiendas' | 'vecinos' | 'perfil' | 'avisos' | 'servicio' | 'tienda' | 'oferta' | 'ajustes';
+type Tab = 'calle' | 'tiendas' | 'vecinos' | 'perfil' | 'avisos' | 'servicio' | 'alta' | 'tienda' | 'oferta' | 'ajustes';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('calle');
@@ -99,7 +100,8 @@ export default function App() {
                 ) : <Tiendas verified={!!me?.verified} openShopId={openShop} onOpenShop={setOpenShop} onCloseShop={() => setOpenShop(null)} />
               )}
               {!shopMode && tab === 'vecinos' && <Vecinos me={me ?? null} />}
-              {!shopMode && tab === 'perfil' && <Perfil me={me ?? null} shop={myShop} unread={unread} onAvisos={() => go('avisos')} onShopMode={() => { setShopMode(true); setTab('tienda'); }} onServicio={fase2 ? () => setTab('servicio') : undefined} onSignOut={signOut} />}
+              {!shopMode && tab === 'perfil' && <Perfil me={me ?? null} shop={myShop} unread={unread} onAvisos={() => go('avisos')} onShopMode={() => { setShopMode(true); setTab('tienda'); }} onServicio={fase2 ? () => setTab('servicio') : undefined} onAlta={() => setTab('alta')} onSignOut={signOut} />}
+              {!shopMode && tab === 'alta' && <AltaTienda onBack={() => setTab('perfil')} onDone={() => { loadMe(); setTab('perfil'); }} />}
               {!shopMode && tab === 'servicio' && <MiServicio onBack={() => setTab('perfil')} />}
               {!shopMode && tab === 'avisos' && <Avisos onBack={() => go('calle')} onRead={() => setUnread(0)} />}
               {shopMode && tab === 'tienda' && hasShop && <TiendaHoy onNewOffer={() => setTab('oferta')} onSettings={() => setTab('ajustes')} onShopChange={loadMe} />}
@@ -127,7 +129,7 @@ export default function App() {
                 <NavItem label="Mi calle" icon="calle" on={tab === 'calle' || tab === 'avisos'} onPress={() => go('calle')} />
                 <NavItem label="Tiendas" icon="tiendas" on={tab === 'tiendas'} onPress={() => go('tiendas')} />
                 <NavItem label="Vecinos" icon="vecinos" on={tab === 'vecinos'} onPress={() => go('vecinos')} />
-                <NavItem label="Perfil" icon="perfil" on={tab === 'perfil' || tab === 'servicio'} onPress={() => go('perfil')} badge={unread} />
+                <NavItem label="Perfil" icon="perfil" on={tab === 'perfil' || tab === 'servicio' || tab === 'alta'} onPress={() => go('perfil')} badge={unread} />
               </View>
             )}
           </>

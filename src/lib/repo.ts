@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { Appointment, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
+import type { Appointment, ShopRequestStatus, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
@@ -13,7 +13,7 @@ const isLive = (o: Offer) => o.active !== false && o.qty_left > 0 && new Date(o.
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 
 const baseShop = {
-  about: null, delivery_enabled: false, delivery_fee_cents: 0, delivery_free_from_cents: null, delivery_radius_m: 500, delivery_slots: [] as string[], delivery_by: null,
+  barrio: 'Palos de la Frontera', about: null, delivery_enabled: false, delivery_fee_cents: 0, delivery_free_from_cents: null, delivery_radius_m: 500, delivery_slots: [] as string[], delivery_by: null,
 };
 
 // ------------------------------------------------------------------
@@ -27,12 +27,20 @@ function demoRepo(): Repo {
     { ...baseShop, id: 's1', name: 'Frutería Carmen', category: 'fruteria', street: 'General Lacy', hours: 'Abierta hasta las 21:00', free_reservations_used: 6, tipo: 'tienda', fachada: 'fruta',
       about: 'Fruta de temporada, mucha de huerta madrileña. Si me pides algo que no tengo, te lo traigo.', delivery_enabled: true, delivery_fee_cents: 150, delivery_free_from_cents: 2000, delivery_slots: ['19:00 a 21:00'], delivery_by: 'Juan, mi hijo' },
     { ...baseShop, id: 's2', name: 'Panadería La Espiga', category: 'panaderia', street: 'General Lacy', hours: 'Abierta hasta las 20:30', free_reservations_used: 2, tipo: 'tienda', fachada: 'pan' },
+    { ...baseShop, id: 's4', name: 'Peluquería Marta', category: 'peluqueria', street: 'Tomás Bretón', hours: 'De 10:00 a 20:00', free_reservations_used: 0, tipo: 'tienda', fachada: 'otra', about: 'Corte, color y peinado.' },
+    { ...baseShop, id: 's5', name: 'Librería La Buhardilla', category: 'otra', street: 'Fuencarral', hours: 'De 10:00 a 21:00', free_reservations_used: 0, tipo: 'tienda', fachada: 'libros', barrio: 'Chamberí' },
     { ...baseShop, id: 's3', name: 'Bar La Parada', category: 'otra', street: 'General Lacy', hours: 'Cocina de 13:30 a 16:00', free_reservations_used: 1, tipo: 'restaurante', fachada: 'bar', delivery_enabled: true, delivery_fee_cents: 100, delivery_slots: ['14:00 a 15:30'], delivery_by: 'Ramón' },
   ];
   const offers: Offer[] = [
     { id: 'o1', shop_id: 's1', shop_name: 'Frutería Carmen', kind: 'rebaja', title: 'Manzanas reineta', unit: 'el kilo', price_cents: 168, old_price_cents: 240, qty_left: 8, until: at(240), created_at: at(-200), active: true },
     { id: 'o3', shop_id: 's2', shop_name: 'Panadería La Espiga', kind: 'novedad', title: 'Pan de masa madre, recién salido', unit: 'la hogaza', price_cents: 380, old_price_cents: null, qty_left: 10, until: at(120), created_at: at(-30), active: true },
   ];
+  offers.push(
+    { id: 'o4', shop_id: 's4', shop_name: 'Peluquería Marta', kind: 'rebaja', title: 'Corte de pelo', unit: 'el corte', price_cents: 1200, old_price_cents: 1500, qty_left: 6, until: at(300), created_at: at(-45), active: true },
+    { id: 'o5', shop_id: 's5', shop_name: 'Librería La Buhardilla', kind: 'novedad', title: 'Firmas de autor el sábado', unit: 'la entrada', price_cents: 0, old_price_cents: null, qty_left: 30, until: at(600), created_at: at(-90), active: true },
+  );
+  const followed = new Set(['s1', 's3', 's5']);
+  let shopReq: ShopRequestStatus | null = null;
   const menus: Menu[] = [
     { id: 'm1', shop_id: 's3', shop_name: 'Bar La Parada', day: madridISODate(), starters: 'Lentejas estofadas o ensalada mixta', mains: 'Merluza a la plancha o pollo asado', includes: 'Postre o café, pan y bebida',
       price_cents: 1000, qty_total: 20, qty_left: 2, until: at(180), allergens: ['Gluten', 'Pescado', 'Huevo', 'Apio', 'Leche'], takeaway: true, delivery: true, active: true, created_at: at(-120) },
@@ -41,7 +49,7 @@ function demoRepo(): Repo {
   const mine: Reservation[] = [];
   const mres: MenuReservation[] = [];
   const muted = new Set<string>();
-  const me: Me = { id: 'u1', name: 'Toni', verified: true, verifiedBy: 'Frutería Carmen', fase2: true };
+  const me: Me = { id: 'u1', name: 'Toni', verified: true, verifiedBy: 'Frutería Carmen', fase2: true, barrio: 'Palos de la Frontera' };
   const notices: Notice[] = [
     { id: 'n1', kind: 'verificado', title: 'Ya eres vecino verificado', body: 'Te ha verificado Frutería Carmen.', created_at: at(-1440), read_at: at(-1400) },
     { id: 'n2', kind: 'reserva', title: 'Tu reserva va en camino', body: 'Frutería Carmen · Manzanas reineta', created_at: at(-20), read_at: null },
@@ -118,6 +126,13 @@ function demoRepo(): Repo {
     async blockUser(userId) { await wait(); convs.filter((c) => c.other_id === userId).forEach((c) => { c.status = 'bloqueada'; }); },
     async report() { await wait(); },
     async myLevel() { await wait(); return { ...level }; },
+    async follows() { await wait(); return [...followed]; },
+    async follow(id) { await wait(); followed.add(id); },
+    async unfollow(id) { await wait(); followed.delete(id); },
+    async followerCounts() { await wait(); return { s1: 41, s2: 18, s3: 33, s4: 9, s5: 12 }; },
+    async claimShop(code) { await wait(); if (code.trim().toUpperCase() !== 'PACO2828') throw new Error('Ese código no existe. Revisa la tarjeta que te dejamos.'); return 'Carnicería Paco'; },
+    async requestShop(r) { await wait(); shopReq = { ...r, id: 'sr1', status: 'pendiente', created_at: new Date().toISOString() }; },
+    async myShopRequest() { await wait(); return shopReq; },
     async people() { await wait(); return people.map((x) => ({ ...x })); },
     async myInviteCode() { await wait(); return 'LACY7K'; },
     async inviteByCode(code) { await wait(); if (!/^[A-Z2-9]{6}$/i.test(code.trim())) throw new Error('Ese código no existe. Revisa las letras.'); people.push({ link_id: 'l' + Date.now(), other_id: 'u' + Date.now(), name: 'Vecino nuevo', status: 'pendiente', i_sent: true, neighbour: true, i_share_vuelvo: false, i_share_cuidado: false, they_share_vuelvo: false, they_share_cuidado: false, awake: false, last_ok_at: null }); },
@@ -222,7 +237,7 @@ function demoRepo(): Repo {
 // ------------------------------------------------------------------
 // Supabase: las reglas (stock, estados, contador) viven en la base de datos.
 // ------------------------------------------------------------------
-const SHOP_COLS = 'id, name, category, street, hours, free_reservations_used, tipo, fachada, about, delivery_enabled, delivery_fee_cents, delivery_free_from_cents, delivery_radius_m, delivery_slots, delivery_by';
+const SHOP_COLS = 'id, name, category, street, barrio, hours, free_reservations_used, tipo, fachada, about, delivery_enabled, delivery_fee_cents, delivery_free_from_cents, delivery_radius_m, delivery_slots, delivery_by';
 const OFFER_COLS = 'id, shop_id, kind, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active';
 const PRO_COLS = 'id, user_id, kind, title, about, price_text, colegiado, seguro_rc, reta, with_minors, cert_menores, status';
 const MENU_COLS = 'id, shop_id, day, starters, mains, includes, price_cents, qty_total, qty_left, until, allergens, takeaway, delivery, active, created_at';
@@ -257,7 +272,7 @@ function liveRepo(): Repo {
     mode: 'live',
     async me() {
       const id = await uid();
-      const rows = ok(await sb.from('profiles').select('display_name, verified_at, fase2, shops:verified_by_shop(name)').eq('id', id).limit(1));
+      const rows = ok(await sb.from('profiles').select('display_name, verified_at, fase2, barrio, shops:verified_by_shop(name)').eq('id', id).limit(1));
       const p = (rows as any[])[0];
       if (!p) {
         // Si dio su nombre al crear la cuenta, el perfil se crea aquí, también tras confirmar el correo.
@@ -265,9 +280,9 @@ function liveRepo(): Repo {
         const name = String(data.user?.user_metadata?.display_name ?? '').trim();
         if (!name) return null;
         await repo.createProfile(name);
-        return { id, name, verified: false, verifiedBy: null, fase2: false };
+        return { id, name, verified: false, verifiedBy: null, fase2: false, barrio: 'Palos de la Frontera' };
       }
-      return { id, name: p.display_name, verified: !!p.verified_at, verifiedBy: p.shops?.name ?? null, fase2: !!p.fase2 };
+      return { id, name: p.display_name, verified: !!p.verified_at, verifiedBy: p.shops?.name ?? null, fase2: !!p.fase2, barrio: p.barrio ?? 'Palos de la Frontera' };
     },
     async createProfile(name) {
       ok(await sb.from('profiles').upsert({ id: await uid(), display_name: name.trim(), street: 'General Lacy' }, { onConflict: 'id', ignoreDuplicates: true }));
@@ -336,6 +351,16 @@ function liveRepo(): Repo {
       const rows = ok(await sb.rpc('my_level')) as any[];
       const r = rows?.[0] ?? { favors_given: 0, hours_given: 0, hours_received: 0, level: 1, next_at: 3 };
       return { favors_given: Number(r.favors_given), hours_given: Number(r.hours_given), hours_received: Number(r.hours_received), level: Number(r.level), next_at: Number(r.next_at) };
+    },
+    async follows() { return ((ok(await sb.from('shop_follows').select('shop_id').eq('user_id', await uid())) as any[]) ?? []).map((r) => r.shop_id); },
+    async follow(shopId) { ok(await sb.from('shop_follows').upsert({ user_id: await uid(), shop_id: shopId }, { onConflict: 'user_id,shop_id', ignoreDuplicates: true })); },
+    async unfollow(shopId) { ok(await sb.from('shop_follows').delete().eq('user_id', await uid()).eq('shop_id', shopId)); },
+    async followerCounts() { return Object.fromEntries(((ok(await sb.rpc('shop_follower_counts')) as any[]) ?? []).map((r) => [r.shop_id, r.followers])); },
+    async claimShop(code) { return ok(await sb.rpc('claim_shop', { p_code: code })) as string; },
+    async requestShop(r) { ok(await sb.from('shop_requests').insert({ ...r, user_id: await uid(), nif: r.nif.trim().toUpperCase(), name: r.name.trim(), street: r.street.trim() })); },
+    async myShopRequest() {
+      const rows = ok(await sb.from('shop_requests').select('id, name, tipo, category, street, nif, independent, phone, status, created_at').eq('user_id', await uid()).order('created_at', { ascending: false }).limit(1)) as ShopRequestStatus[];
+      return rows[0] ?? null;
     },
     async people() { return ((ok(await sb.rpc('my_people')) as any[]) ?? []) as Person[]; },
     async myInviteCode() { return ok(await sb.rpc('my_invite_code')) as string; },

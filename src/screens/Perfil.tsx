@@ -5,7 +5,7 @@ import { repo } from '../lib/repo';
 import type { Me, Shop } from '../lib/types';
 import { colors } from '../theme';
 
-export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onSignOut: () => void }) {
+export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onAlta, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onAlta: () => void; onSignOut: () => void }) {
   const [stats, setStats] = useState({ reservas: 0, tiendas: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -61,12 +61,11 @@ export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServi
         <View style={st.stat}><Text style={st.statN}>{stats.tiendas}</Text><Text style={T.small}>tiendas tuyas</Text></View>
       </View>
 
-      {shop && (
-        <>
-          <Label>Tu negocio</Label>
-          <Row title={shop.tipo === 'restaurante' ? 'Modo restaurante' : 'Modo tienda'} sub={`${shop.name} · reservas, publicar y ajustes`} onPress={onShopMode} accent />
-        </>
-      )}
+      <Label>Tu negocio</Label>
+      {shop
+        ? <Row title={shop.tipo === 'restaurante' ? 'Modo restaurante' : 'Modo tienda'} sub={`${shop.name} · reservas, publicar y ajustes`} onPress={onShopMode} accent />
+        : <View style={st.group}><Row title="Tengo un negocio en el barrio" sub="Activa tu tienda con el código de la visita o pide el alta" onPress={onAlta} /></View>}
+      {shop && <Text style={[T.small, { color: colors.green }]} onPress={onAlta}>+ Añadir otro negocio</Text>}
 
       {onServicio && (
         <>

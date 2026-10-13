@@ -29,7 +29,9 @@ export function offerBadge(o: Offer) {
 type Group = { shopId: string; shopName?: string; latest: string; offers: Offer[]; menu?: Menu };
 
 export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, onOpenShop }: { me: Me | null; myShop: Shop | null; unread: number; onVerified: () => void; onAvisos: () => void; onOpenShop: (shopId: string) => void }) {
-  const [seg, setSeg] = useState<'hoy' | 'agenda'>('hoy');
+  const [seg, setSeg] = useState<'barrio' | 'plaza' | 'ciudad' | 'agenda'>('barrio');
+  const [follows, setFollows] = useState<string[]>([]);
+  const [discover, setDiscover] = useState(false);
   const { width } = useWindowDimensions();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -44,8 +46,8 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
 
   const load = useCallback(async () => {
     try {
-      const [o, m, s, r, mr] = await Promise.all([repo.liveOffers(), repo.liveMenus(), repo.shops(), repo.myReservations(), repo.myMenuReservations()]);
-      setOffers(o); setMenus(m); setShops(s); setMine(r); setMineMenus(mr);
+      const [o, m, s, r, mr, f] = await Promise.all([repo.liveOffers(), repo.liveMenus(), repo.shops(), repo.myReservations(), repo.myMenuReservations(), repo.follows().catch(() => [] as string[])]);
+      setOffers(o); setMenus(m); setShops(s); setMine(r); setMineMenus(mr); setFollows(f);
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
     } finally {
@@ -58,6 +60,16 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
 
   const refresh = () => { load(); onVerified(); };
   const shopById = (id: string) => shops.find((s) => s.id === id);
+
+  const myBarrio = me?.barrio ?? 'Palos de la Frontera';
+  const follows_ = new Set(follows);
+  const inBarrio = (id: string) => (shopById(id)?.barrio ?? myBarrio) === myBarrio;
+  const toggleFollow = async (shopId: string) => {
+    const on = follows_.has(shopId);
+    setFollows((x) => (on ? x.filter((y) => y !== shopId) : [...x, shopId]));
+    try { if (on) await repo.unfollow(shopId); else await repo.follow(shopId); }
+    catch (e: any) { Alert.alert('No se ha podido', e.message); load(); }
+  };
 
   const askCode = async () => {
     try { setCode(await repo.requestShopCode()); } catch (e: any) { Alert.alert('Error', e.message); }
@@ -81,6 +93,11 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
         return acc;
       }, {}),
   ).sort((a, b) => (a.latest < b.latest ? 1 : -1));
+  const shown = groups.filter((g) => (seg === 'barrio' ? follows_.has(g.shopId) && inBarrio(g.shopId) : seg === 'plaza' ? inBarrio(g.shopId) : seg === 'ciudad' ? follows_.has(g.shopId) && !inBarrio(g.shopId) : false));
+  const barrioShops = shops.filter((x) => (x.barrio ?? myBarrio) === myBarrio);
+  const otherShops = shops.filter((x) => (x.barrio ?? myBarrio) !== myBarrio);
+  const followedHere = barrioShops.filter((x) => follows_.has(x.id));
+  const followedAway = otherShops.filter((x) => follows_.has(x.id));
 
   const activas = mine.filter((r) => r.status === 'nueva' || r.status === 'lista');
   const activasMenu = mineMenus.filter((r) => r.status === 'nueva' || r.status === 'lista');
@@ -104,8 +121,8 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
 
         <View style={st.street}>
           <Calle width={width} />
-          {verified && (offers.length > 0 || menus.length > 0) && (
-            <View style={st.streetPill}><Text style={st.streetPillText}>{offers.length + menus.length} {offers.length + menus.length === 1 ? 'cosa nueva' : 'cosas nuevas'} hoy en tu calle</Text></View>
+          {verified && groups.length > 0 && (
+            <View style={st.streetPill}><Text style={st.streetPillText}>{groups.filter((g) => inBarrio(g.shopId)).length} {groups.filter((g) => inBarrio(g.shopId)).length === 1 ? 'tienda ha publicado' : 'tiendas han publicado'} hoy en el barrio</Text></View>
           )}
         </View>
 
@@ -152,9 +169,29 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
           </>
         )}
 
-        {verified && <Segment items={[{ id: 'hoy', label: 'Hoy en tu calle' }, { id: 'agenda', label: 'Agenda del barrio' }]} value={seg} onChange={setSeg} />}
+        {verified && <Segment items={[{ id: 'barrio', label: 'Mi barrio' }, { id: 'plaza', label: 'La plaza' }, { id: 'ciudad', label: 'Mi ciudad' }, { id: 'agenda', label: 'Agenda' }]} value={seg} onChange={(k) => { setSeg(k); setDiscover(false); }} />}
         {seg === 'agenda' && <Agenda me={me} shop={myShop} />}
-        {seg === 'hoy' && groups.map((g) => {
+        {verified && seg === 'barrio' && <Text style={T.small}>{followedHere.length === 0 ? 'Tu barrio lo haces tú: sigue las tiendas que te gustan y te avisamos las primeras cuando publiquen.' : `Sigues ${followedHere.length} ${followedHere.length === 1 ? 'tienda' : 'tiendas'} de ${myBarrio}. Te avisan antes que a nadie.`}</Text>}
+        {verified && seg === 'plaza' && <Text style={T.small}>Todo lo publicado hoy en {myBarrio}, sigas a la tienda o no. Por orden de hora, nunca por quién paga.</Text>}
+        {verified && seg === 'ciudad' && <Text style={T.small}>Las tiendas que sigues fuera de tu barrio. Tu gente de otros barrios está en Vecinos, Mi gente.</Text>}
+        {verified && ((seg === 'barrio' && (followedHere.length === 0 || discover)) || (seg === 'ciudad' && (followedAway.length === 0 || discover))) && (
+          <Card style={{ gap: 8 }}>
+            <Text style={T.h2}>{seg === 'barrio' ? `Tiendas de ${myBarrio}` : 'Tiendas de otros barrios'}</Text>
+            {(seg === 'barrio' ? barrioShops : otherShops).length === 0 && <Text style={T.small}>Todavía no hay tiendas de otros barrios en Stoop.</Text>}
+            {(seg === 'barrio' ? barrioShops : otherShops).map((x) => (
+              <View key={x.id} style={st.followRow}>
+                <Initial name={x.name} size={34} square />
+                <View style={{ flex: 1 }}><Text style={T.strong} onPress={() => onOpenShop(x.id)}>{x.name}</Text><Text style={T.small}>{x.street}{x.barrio !== myBarrio ? ` · ${x.barrio}` : ''}</Text></View>
+                <Button small label={follows_.has(x.id) ? 'Siguiendo' : 'Seguir'} tone={follows_.has(x.id) ? 'soft' : 'primary'} onPress={() => toggleFollow(x.id)} />
+              </View>
+            ))}
+            {discover && <Button small label="Listo" tone="soft" onPress={() => setDiscover(false)} />}
+          </Card>
+        )}
+        {verified && (seg === 'barrio' || seg === 'ciudad') && !discover && (seg === 'barrio' ? followedHere : followedAway).length > 0 && (
+          <Text style={[T.small, { color: colors.green, fontWeight: '600' }]} onPress={() => setDiscover(true)}>{seg === 'barrio' ? '+ Seguir más tiendas del barrio' : '+ Seguir tiendas de otros barrios'}</Text>
+        )}
+        {seg !== 'agenda' && shown.map((g) => {
           const shop = shopById(g.shopId);
           return (
             <Card key={g.shopId} style={{ gap: 0, paddingVertical: 6 }}>
@@ -162,9 +199,11 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
                 <Initial name={g.shopName ?? 'T'} size={36} square />
                 <View style={{ flex: 1 }}>
                   <Text style={T.strong} onPress={() => onOpenShop(g.shopId)}>{g.shopName}</Text>
-                  <Text style={T.small}>{hhmm(g.latest)}{shop?.delivery_enabled ? ' · también a domicilio' : ''}</Text>
+                  <Text style={T.small}>{hhmm(g.latest)}{shop && shop.barrio !== myBarrio ? ` · ${shop.barrio}` : ''}{shop?.delivery_enabled ? ' · también a domicilio' : ''}</Text>
                 </View>
-                <Button small label="Ver" tone="soft" onPress={() => onOpenShop(g.shopId)} />
+                {follows_.has(g.shopId)
+                  ? <Badge label="La sigues" color={colors.green} soft={colors.greenSoft} />
+                  : <Button small label="Seguir" tone="soft" onPress={() => toggleFollow(g.shopId)} />}
               </View>
               {g.menu && (
                 <View style={[st.offer, st.sep]}>
@@ -199,10 +238,14 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
           );
         })}
 
-        {seg === 'hoy' && verified && !loading && (
+        {seg !== 'agenda' && verified && !loading && !(seg === 'ciudad' && followedAway.length === 0) && !(seg === 'barrio' && followedHere.length === 0) && (
           <View style={st.done}>
-            <Text style={T.h2}>{groups.length === 0 ? 'Hoy todavía no hay nada' : 'Ya estás al día'}</Text>
-            <Text style={[T.small, { textAlign: 'center' }]}>{groups.length === 0 ? 'Las tiendas suelen publicar por la tarde. Mira la pestaña Tiendas.' : 'Esto es todo lo que ha pasado hoy en tu calle. Mañana habrá más.'}</Text>
+            <Text style={T.h2}>{shown.length === 0 ? 'Hoy todavía no hay nada' : 'Ya estás al día'}</Text>
+            <Text style={[T.small, { textAlign: 'center' }]}>
+              {shown.length === 0
+                ? (seg === 'barrio' ? 'Tus tiendas aún no han publicado hoy. Mira La plaza por si hay algo de otras.' : 'Las tiendas suelen publicar por la tarde.')
+                : seg === 'barrio' ? 'Esto es lo de tus tiendas hoy. En La plaza está todo lo del barrio.' : 'Esto es todo por hoy. Mañana habrá más.'}
+            </Text>
           </View>
         )}
 
@@ -243,6 +286,7 @@ const st = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   price: { fontSize: 19, fontWeight: '700', color: colors.ink },
   mute: { alignSelf: 'flex-end', fontSize: 13, color: colors.faint, paddingVertical: 8 },
+  followRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   done: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#C9CDD3', borderRadius: 16, padding: 20, alignItems: 'center', gap: 6, marginTop: 4 },
   bell: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   bellDot: { position: 'absolute', right: -2, top: -2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
