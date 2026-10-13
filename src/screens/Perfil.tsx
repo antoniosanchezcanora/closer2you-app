@@ -5,7 +5,7 @@ import { repo } from '../lib/repo';
 import type { Me, Shop } from '../lib/types';
 import { colors } from '../theme';
 
-export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onAlta, onLoMio, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onAlta: () => void; onLoMio?: () => void; onSignOut: () => void }) {
+export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onAlta, onLoMio, onEmergencias, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onAlta: () => void; onLoMio?: () => void; onEmergencias?: () => void; onSignOut: () => void }) {
   const [stats, setStats] = useState({ reservas: 0, tiendas: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -87,6 +87,7 @@ export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServi
         <Row title="Avisos" sub="Reservas, entregas y tu verificación" right={unread ? <Badge label={String(unread)} color={colors.red} /> : undefined} onPress={onAvisos} />
         <Row title="Letra grande" sub="Stoop usa el tamaño de letra de tu móvil: Ajustes > Pantalla y brillo > Tamaño del texto" sep />
         <Row title="Quién ve mi perfil" sub="Solo las tiendas en las que reservas ven tu nombre. Tu dirección, nadie." sep />
+        {onEmergencias && <Row title="Personas para emergencias" sub="Hasta dos personas de tu gente" onPress={onEmergencias} sep />}
       </View>
 
       <Label>Mis datos</Label>

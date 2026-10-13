@@ -1,7 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { Appointment, AwakeSchedule, ChatGroup, GroupMessage, PresencePerson, ShopMessage, ShopRequestStatus, ShopThread, TableBooking, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
+import type { Appointment, DiscreetAlert, AwakeSchedule, ChatGroup, GroupMessage, PresencePerson, ShopMessage, ShopRequestStatus, ShopThread, TableBooking, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
@@ -84,6 +84,8 @@ function demoRepo(): Repo {
     { id: 'e2', creator_id: 'u3', shop_id: 's1', shop_name: 'Frutería Carmen', title: 'Castañas en la puerta', category: 'barrio', starts_at: days(4, 11), place: 'Frutería Carmen', capacity: null, price_text: 'Gratis', description: 'Asamos las primeras castañas de la temporada.', kids: false, active: true, going: 23, me_going: false },
   ];
   let selected = 's1';
+  let discreet: string[] = ['u7'];
+  const discreetInbox: DiscreetAlert[] = [];
   const people: Person[] = [
     { link_id: 'l1', other_id: 'u5', name: 'Lucía', status: 'aceptada', i_sent: true, neighbour: true, i_share_vuelvo: true, i_share_cuidado: true, they_share_vuelvo: true, they_share_cuidado: true, awake: true, last_ok_at: null },
     { link_id: 'l2', other_id: 'u4', name: 'Ana', status: 'aceptada', i_sent: false, neighbour: true, i_share_vuelvo: false, i_share_cuidado: true, they_share_vuelvo: false, they_share_cuidado: true, awake: false, last_ok_at: at(-140) },
@@ -206,6 +208,13 @@ function demoRepo(): Repo {
     },
     async imOk() { await wait(); presence.last_ok_at = new Date().toISOString(); },
     async setAwake(minutes) { await wait(); presence.awake_until = minutes > 0 ? new Date(Date.now() + minutes * 60000).toISOString() : null; },
+    async myDiscreetContacts() { await wait(); return discreet.map((id) => ({ id, name: people.find((p) => p.other_id === id)?.name ?? 'Vecino' })); },
+    async setDiscreetContacts(ids) { await wait(); if (ids.length > 2) throw new Error('Elige como mucho a dos personas'); discreet = [...new Set(ids)]; },
+    async discreetForMe() { await wait(); return [{ id: 'u5', name: 'Lucía' }]; },
+    async leaveDiscreet() { await wait(); },
+    async sendDiscreet() { await wait(); },
+    async discreetInbox() { await wait(); return discreetInbox.map((a) => ({ ...a })); },
+    async markDiscreetCalled(id) { await wait(); const a = discreetInbox.find((x) => x.id === id); if (a) a.called_at = new Date().toISOString(); },
     async askHelp() { await wait(); if (!alerts.some((a) => a.user_id === me.id && a.status !== 'cerrada')) alerts.unshift({ id: 'a' + Date.now(), user_id: me.id, user_name: me.name, status: 'abierta', responder_name: null, created_at: new Date().toISOString(), my_answer: null }); },
     async careAlerts() { await wait(); return alerts.filter((a) => a.status !== 'cerrada').map((a) => ({ ...a })); },
     async respondHelp(id, going) { await wait(); const a = alerts.find((x) => x.id === id); if (a) { a.my_answer = going ? 'voy' : 'no_puedo'; if (going) { a.status = 'atendida'; a.responder_name = me.name; } } },
@@ -504,6 +513,13 @@ function liveRepo(): Repo {
     async imOk() { ok(await sb.rpc('i_am_ok')); },
     async setAwake(minutes) { ok(await sb.rpc('set_awake', { p_minutes: minutes })); },
     async askHelp() { ok(await sb.rpc('ask_help')); },
+    async myDiscreetContacts() { return ((ok(await sb.rpc('my_discreet_contacts')) as any[]) ?? []).map((r) => ({ id: r.contact_id, name: r.name })); },
+    async setDiscreetContacts(ids) { ok(await sb.rpc('set_discreet_contacts', { p_ids: ids })); },
+    async discreetForMe() { return ((ok(await sb.rpc('discreet_for_me')) as any[]) ?? []).map((r) => ({ id: r.owner_id, name: r.name })); },
+    async leaveDiscreet(ownerId) { ok(await sb.rpc('leave_discreet', { p_owner: ownerId })); },
+    async sendDiscreet(lat, lng) { ok(await sb.rpc('send_discreet', { p_lat: lat, p_lng: lng })); },
+    async discreetInbox() { return ((ok(await sb.rpc('discreet_inbox')) as any[]) ?? []) as DiscreetAlert[]; },
+    async markDiscreetCalled(alertId) { ok(await sb.rpc('mark_discreet_called', { p_alert: alertId })); },
     async careAlerts() {
       const id = await uid();
       const rows = ok(await sb.from('care_alerts').select('id, user_id, status, created_at, user:profiles!care_alerts_user_id_fkey(display_name), responder:profiles!care_alerts_responder_id_fkey(display_name)').neq('status', 'cerrada').order('created_at', { ascending: false }).limit(20)) as any[];

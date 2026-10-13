@@ -218,6 +218,8 @@ export type Person = {
   last_ok_at: string | null;
 };
 export type CareAlert = { id: string; user_id: string; user_name: string; status: 'abierta' | 'atendida' | 'cerrada'; responder_name: string | null; created_at: string; my_answer: 'voy' | 'no_puedo' | null };
+export type DiscreetPerson = { id: string; name: string };
+export type DiscreetAlert = { id: string; owner_id: string; name: string; lat: number | null; lng: number | null; created_at: string; called_at: string | null; others_called: string | null };
 export type Walk = { id: string; user_id: string; user_name: string; status: 'activa' | 'llegado' | 'cancelada'; eta_at: string; lat: number | null; lng: number | null; pos_at: string | null; created_at: string; ended_at: string | null };
 export type AwakeSchedule = { id: string; days: number[]; start_time: string; end_time: string };
 export type ShopThread = { id: string; shop_id: string; shop_name: string; neighbour_id: string; neighbour_name: string; last_at: string; last_text: string | null };
@@ -334,6 +336,14 @@ export interface Repo {
   imOk(): Promise<void>;
   setAwake(minutes: number): Promise<void>;
   askHelp(): Promise<void>;
+  // Aviso discreto: a una o dos personas, sin rastro en el móvil de quien lo envía
+  myDiscreetContacts(): Promise<DiscreetPerson[]>;
+  setDiscreetContacts(ids: string[]): Promise<void>;
+  discreetForMe(): Promise<DiscreetPerson[]>; // quién me ha elegido
+  leaveDiscreet(ownerId: string): Promise<void>;
+  sendDiscreet(lat: number | null, lng: number | null): Promise<void>;
+  discreetInbox(): Promise<DiscreetAlert[]>;
+  markDiscreetCalled(alertId: string): Promise<void>;
   careAlerts(): Promise<CareAlert[]>; // las mías abiertas y las de mi gente
   respondHelp(alertId: string, going: boolean): Promise<void>;
   closeHelp(alertId: string): Promise<void>;

@@ -5,7 +5,7 @@ import { Badge, Button, Card, Chip, Initial, Label, Note, T } from '../component
 import { WalkMap } from '../components/WalkMap';
 import { repo } from '../lib/repo';
 import { supabase } from '../lib/supabase';
-import type { AwakeSchedule, CareAlert, Conversation, Me, MyPresence, Person, PresencePerson, Walk } from '../lib/types';
+import type { AwakeSchedule, CareAlert, DiscreetAlert, Conversation, Me, MyPresence, Person, PresencePerson, Walk } from '../lib/types';
 import { colorFor, colors, hhmm } from '../theme';
 
 // Fuera del render: la hora actual (la regla de pureza de React no deja llamar a Date.now() dentro).
@@ -55,6 +55,8 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState<PresencePerson[]>([]);
   const [muted, setMuted] = useState<string[]>([]);
+  const [discreet, setDiscreet] = useState<DiscreetAlert[]>([]);
+  const [hasDiscreet, setHasDiscreet] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [goingHome, setGoingHome] = useState(false);
@@ -86,6 +88,8 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
       setPeople(p); setAlerts(a); setPresence(pr); applyWalks(w);
       repo.peoplePresence().then(setOnline).catch(() => {});
       repo.mutes().then(setMuted).catch(() => {});
+      repo.discreetInbox().then(setDiscreet).catch(() => {});
+      repo.myDiscreetContacts().then((c) => setHasDiscreet(c.length > 0)).catch(() => {});
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
     } finally {
@@ -96,13 +100,14 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
 
   // Al momento mientras la app está abierta: avisos de ayuda, vueltas a casa e invitaciones.
   useEffect(() => {
-    const t = setInterval(() => setTick((x) => x + 1), 30000);
+    const t = setInterval(() => { setTick((x) => x + 1); repo.discreetInbox().then(setDiscreet).catch(() => {}); }, 30000);
     if (!supabase) return () => clearInterval(t);
     const ch = supabase.channel('migente')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'care_alerts' }, () => load())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'walks' }, () => load())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'walks' }, () => refreshWalks())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trust_links' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'discreet_recipients' }, () => load())
       .subscribe();
     return () => { clearInterval(t); supabase?.removeChannel(ch); };
   }, [load, refreshWalks]);
@@ -132,6 +137,22 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
   const awake = !!presence.awake_until && new Date(presence.awake_until).getTime() > nowMs();
   const cuidadoCount = accepted.filter((p) => p.i_share_cuidado).length;
 
+  // Aviso discreto: mantener pulsado «Estoy bien» 3 segundos. En pantalla se ve igual que un «Estoy bien»,
+  // pero no se manda a tu gente: solo llega a tus personas para emergencias. No se pide ningún permiso
+  // (saldría un diálogo en pantalla): si el móvil ya tiene la ubicación, va con ella.
+  const sendDiscreet = async () => {
+    setPresence((p) => ({ ...p, last_ok_at: new Date().toISOString() }));
+    let lat: number | null = null, lng: number | null = null;
+    try {
+      const perm = await Location.getForegroundPermissionsAsync();
+      if (perm.granted) {
+        const pos = (await Location.getLastKnownPositionAsync({ maxAge: 15 * 60000 })) ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+        if (pos) { lat = pos.coords.latitude; lng = pos.coords.longitude; }
+      }
+    } catch { /* sin ubicación: el aviso sale igual */ }
+    repo.sendDiscreet(lat, lng).catch(() => {});
+  };
+
   const askHelp = () => {
     if (cuidadoCount === 0) { Alert.alert('Aún no tienes a quién avisar', 'Añade a alguien a tu gente y deja activado «Recibe mis avisos de ayuda». Si es una urgencia, llama al 112.'); return; }
     Alert.alert('Pedir ayuda ahora', `Avisamos a ${cuidadoCount} ${cuidadoCount === 1 ? 'persona' : 'personas'} de tu gente. Si es una urgencia, llama al 112.`, [
@@ -142,6 +163,19 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
 
   return (
     <ScrollView contentContainerStyle={st.wrap} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+      {discreet.map((a) => (
+        <Card key={a.id} tint="#7A1020" style={{ gap: 10 }}>
+          <Text style={[T.h1, { color: '#FFFFFF' }]}>{a.name} necesita ayuda en casa</Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 16, lineHeight: 22 }}>Aviso discreto, {agoText(a.created_at)}. Llama al 112 y cuéntales lo que sabes. No vayas sola a la puerta.</Text>
+          <Btn112 big />
+          {a.lat != null && a.lng != null && <Button label="Ver dónde está" tone="ghost" onPress={() => openMap(a.lat!, a.lng!, a.name)} />}
+          {a.called_at
+            ? <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 15 }}>Has llamado al 112 a las {hhmm(a.called_at)}.</Text>
+            : <Button label="Ya he llamado al 112" tone="ghost" onPress={() => run(() => repo.markDiscreetCalled(a.id))} />}
+          {!!a.others_called && <Text style={{ color: '#FFE3E3', fontSize: 14 }}>{a.others_called} también ha llamado.</Text>}
+          <Text style={{ color: '#FFE3E3', fontSize: 13 }}>No le escribas ni la llames: alguien podría ver su móvil.</Text>
+        </Card>
+      ))}
       {theirAlerts.map((a) => (
         <Card key={a.id} tint={colors.red} style={{ gap: 10 }}>
           <Text style={[T.h1, { color: '#FFFFFF' }]}>{a.user_name} necesita ayuda</Text>
@@ -173,7 +207,7 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
       <Card style={{ gap: 10 }}>
         <Text style={T.h2}>¿Cómo estás?</Text>
         <View style={st.row}>
-          <Pressable accessibilityRole="button" onPress={() => run(() => repo.imOk())} style={[st.big, { borderColor: colors.green }]}>
+          <Pressable accessibilityRole="button" onPress={() => run(() => repo.imOk())} onLongPress={hasDiscreet ? sendDiscreet : undefined} delayLongPress={3000} style={[st.big, { borderColor: colors.green }]}>
             <Text style={[st.bigT, { color: colors.green }]}>Estoy bien</Text>
             <Text style={T.small}>{isToday(presence.last_ok_at) ? `Avisado a las ${hhmm(presence.last_ok_at!)}` : 'Tu gente lo verá'}</Text>
           </Pressable>
