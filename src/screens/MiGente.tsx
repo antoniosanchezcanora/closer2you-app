@@ -293,7 +293,7 @@ function Despierto({ awake, awakeUntil, onSetAwake }: { awake: boolean; awakeUnt
           <View style={st.row}>
             <Chip label="L a V" on={days.join() === '1,2,3,4,5'} onPress={() => setDays([1, 2, 3, 4, 5])} color={colors.blue} />
             <Chip label="Finde" on={days.join() === '6,7'} onPress={() => setDays([6, 7])} color={colors.blue} />
-            {DAYS.map((d, i) => <Chip key={d} label={d} on={days.includes(i + 1)} onPress={() => setDays(days.includes(i + 1) ? days.filter((x) => x !== i + 1) : [...days, i + 1].sort())} />)}
+            {DAYS.map((d, i) => <Chip key={d} label={d} on={days.includes(i + 1)} onPress={() => setDays(days.includes(i + 1) ? days.filter((x) => x !== i + 1) : [...days, i + 1].sort())} color={colors.blue} />)}
           </View>
           <Text style={T.small}>Desde</Text>
           <View style={st.row}>{HOURS.slice(0, -1).map((h) => <Chip key={h} label={h} on={from === h} onPress={() => setFrom(h)} color={colors.blue} />)}</View>
