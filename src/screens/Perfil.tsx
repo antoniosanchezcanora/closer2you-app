@@ -5,7 +5,7 @@ import { repo } from '../lib/repo';
 import type { Me, Shop } from '../lib/types';
 import { colors } from '../theme';
 
-export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onAlta, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onAlta: () => void; onSignOut: () => void }) {
+export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServicio, onAlta, onLoMio, onSignOut }: { me: Me | null; shop: Shop | null; unread: number; onAvisos: () => void; onShopMode: () => void; onServicio?: () => void; onAlta: () => void; onLoMio?: () => void; onSignOut: () => void }) {
   const [stats, setStats] = useState({ reservas: 0, tiendas: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -60,6 +60,12 @@ export default function Perfil({ me, shop, unread, onAvisos, onShopMode, onServi
         <View style={st.stat}><Text style={st.statN}>{stats.reservas}</Text><Text style={T.small}>compras en tu calle</Text></View>
         <View style={st.stat}><Text style={st.statN}>{stats.tiendas}</Text><Text style={T.small}>tiendas tuyas</Text></View>
       </View>
+
+      {onLoMio && (
+        <View style={st.group}>
+          <Row title="Lo mío" sub="Tu nivel, tu banco de tiempo y lo que has pedido u ofrecido" onPress={onLoMio} />
+        </View>
+      )}
 
       <Label>Tu negocio</Label>
       {shop

@@ -5,7 +5,7 @@ import { Badge, Button, Card, Chip, Initial, Label, Note, T } from '../component
 import { WalkMap } from '../components/WalkMap';
 import { repo } from '../lib/repo';
 import { supabase } from '../lib/supabase';
-import type { CareAlert, Conversation, Me, MyPresence, Person, PresencePerson, Walk } from '../lib/types';
+import type { AwakeSchedule, CareAlert, Conversation, Me, MyPresence, Person, PresencePerson, Walk } from '../lib/types';
 import { colorFor, colors, hhmm } from '../theme';
 
 // Fuera del render: la hora actual (la regla de pureza de React no deja llamar a Date.now() dentro).
@@ -35,6 +35,7 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
   const [presence, setPresence] = useState<MyPresence>({ last_ok_at: null, awake_until: null });
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState<PresencePerson[]>([]);
+  const [muted, setMuted] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [goingHome, setGoingHome] = useState(false);
@@ -65,6 +66,7 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
       const [p, a, w, pr] = await Promise.all([repo.people(), repo.careAlerts(), repo.walks(), repo.myPresence()]);
       setPeople(p); setAlerts(a); setPresence(pr); applyWalks(w);
       repo.peoplePresence().then(setOnline).catch(() => {});
+      repo.mutes().then(setMuted).catch(() => {});
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
     } finally {
@@ -149,6 +151,24 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
         </Card>
       )}
 
+      <Card style={{ gap: 10 }}>
+        <Text style={T.h2}>¿Cómo estás?</Text>
+        <View style={st.row}>
+          <Pressable accessibilityRole="button" onPress={() => run(() => repo.imOk())} style={[st.big, { borderColor: colors.green }]}>
+            <Text style={[st.bigT, { color: colors.green }]}>Estoy bien</Text>
+            <Text style={T.small}>{isToday(presence.last_ok_at) ? `Avisado a las ${hhmm(presence.last_ok_at!)}` : 'Tu gente lo verá'}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={askHelp} style={[st.big, { backgroundColor: colors.red, borderColor: colors.red }]}>
+            <Text style={[st.bigT, { color: '#FFFFFF' }]}>Necesito ayuda</Text>
+            <Text style={[T.small, { color: '#FFE3E3' }]}>Avisa a tu gente</Text>
+          </Pressable>
+        </View>
+        <Button label="Vuelvo a casa" tone="blue" onPress={() => setGoingHome(true)} />
+        <Btn112 />
+      </Card>
+
+      <Despierto awake={awake} awakeUntil={presence.awake_until} onSetAwake={(m) => run(() => repo.setAwake(m))} />
+
       {theirWalks.map((w) => {
         const late = new Date(w.eta_at).getTime() < nowMs();
         return (
@@ -170,33 +190,6 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
           </Card>
         );
       })}
-
-      <Card style={{ gap: 10 }}>
-        <Text style={T.h2}>¿Cómo estás?</Text>
-        <View style={st.row}>
-          <Pressable accessibilityRole="button" onPress={() => run(() => repo.imOk())} style={[st.big, { borderColor: colors.green }]}>
-            <Text style={[st.bigT, { color: colors.green }]}>Estoy bien</Text>
-            <Text style={T.small}>{isToday(presence.last_ok_at) ? `Avisado a las ${hhmm(presence.last_ok_at!)}` : 'Tu gente lo verá'}</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={askHelp} style={[st.big, { backgroundColor: colors.red, borderColor: colors.red }]}>
-            <Text style={[st.bigT, { color: '#FFFFFF' }]}>Necesito ayuda</Text>
-            <Text style={[T.small, { color: '#FFE3E3' }]}>Avisa a tu gente</Text>
-          </Pressable>
-        </View>
-        <Button label="Vuelvo a casa" tone="blue" onPress={() => setGoingHome(true)} />
-        <Btn112 />
-      </Card>
-
-      <Card style={{ gap: 8 }}>
-        <Text style={T.h2}>Estoy despierto</Text>
-        <Text style={T.small}>Tu gente verá que pueden escribirte o llamarte esta noche.</Text>
-        <View style={st.row}>
-          <Chip label="1 hora" on={false} onPress={() => run(() => repo.setAwake(60))} color={colors.blue} />
-          <Chip label="2 horas" on={false} onPress={() => run(() => repo.setAwake(120))} color={colors.blue} />
-          {awake && <Chip label="Ya no" on={false} onPress={() => run(() => repo.setAwake(0))} />}
-        </View>
-        {awake && <Text style={[T.small, { color: colors.blue }]}>Despierto hasta las {hhmm(presence.awake_until!)}</Text>}
-      </Card>
 
       {incoming.length > 0 && <Label>Quieren añadirte</Label>}
       {incoming.map((p) => (
@@ -228,6 +221,7 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
                   <View style={st.row}>
                     {online.some((o) => o.other_id === p.other_id && o.online) && <Badge label="Conectado" color={colors.green} soft={colors.greenSoft} />}
                     {p.awake && <Badge label="Despierto" color={colors.blue} soft={colors.blueSoft} />}
+                    {muted.includes(p.other_id) && <Badge label="Silenciado" color={colors.muted} soft="#EEEFF1" />}
                     {isToday(p.last_ok_at) && <Badge label={`Bien hoy, ${hhmm(p.last_ok_at!)}`} color={colors.green} soft={colors.greenSoft} />}
                   </View>
                 </View>
@@ -240,6 +234,8 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
                   <Toggle label="Puede seguir mi vuelta a casa" on={p.i_share_vuelvo} onPress={() => run(() => repo.setPerm(p.other_id, !p.i_share_vuelvo, p.i_share_cuidado))} />
                   <Toggle label="Recibe mis avisos de ayuda y ve mi «Estoy bien»" on={p.i_share_cuidado} onPress={() => run(() => repo.setPerm(p.other_id, p.i_share_vuelvo, !p.i_share_cuidado))} />
                   <Text style={T.small}>{p.name} comparte contigo: {[p.they_share_vuelvo && 'su vuelta a casa', p.they_share_cuidado && 'sus avisos de ayuda'].filter(Boolean).join(' y ') || 'nada por ahora'}.</Text>
+                  <Toggle label="Silenciar (no se entera)" on={muted.includes(p.other_id)} onPress={() => run(() => (muted.includes(p.other_id) ? repo.unmute(p.other_id) : repo.mute(p.other_id)))} />
+                  {muted.includes(p.other_id) && <Text style={T.small}>No verás su ventana, sus mensajes ni sus peticiones, y no te avisará. Sus avisos de «Necesito ayuda» te seguirán llegando.</Text>}
                   <Button small label="Quitar de mi gente" tone="ghost" onPress={() => Alert.alert('Quitar de mi gente', `${p.name} dejará de ver lo que compartes.`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Quitar', style: 'destructive', onPress: () => run(() => repo.removePerson(p.other_id)) }])} />
                 </View>
               )}
@@ -250,6 +246,68 @@ export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Co
       {sent.length > 0 && <Note>{`Esperando a que acepten: ${sent.map((p) => p.name).join(', ')}.`}</Note>}
       <Note>Stoop no sustituye al 112. Los avisos llegan mientras tu gente tiene Stoop abierto; los avisos con el móvil bloqueado llegarán con la versión instalable.</Note>
     </ScrollView>
+  );
+}
+
+const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const HOURS = ['07:00', '08:00', '09:00', '10:00', '13:00', '14:00', '20:00', '21:00', '22:00', '23:00', '23:59'];
+const daysText = (d: number[]) => {
+  const k = [...d].sort().join(',');
+  if (k === '1,2,3,4,5') return 'De lunes a viernes';
+  if (k === '6,7') return 'Fines de semana';
+  if (k === '1,2,3,4,5,6,7') return 'Todos los días';
+  return [...d].sort().map((x) => DAYS[x - 1]).join(' ');
+};
+
+function Despierto({ awake, awakeUntil, onSetAwake }: { awake: boolean; awakeUntil: string | null; onSetAwake: (min: number) => void }) {
+  const [list, setList] = useState<AwakeSchedule[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [from, setFrom] = useState('21:00');
+  const [to, setTo] = useState('23:00');
+  const load = useCallback(async () => { try { setList(await repo.schedules()); } catch { /* sin horario */ } }, []);
+  useEffect(() => { Promise.resolve().then(load); }, [load]);
+  const save = async () => {
+    try { await repo.addSchedule(days, from, to); setAdding(false); load(); } catch (e: any) { Alert.alert('No se ha podido', e.message); }
+  };
+  return (
+    <Card style={{ gap: 8 }}>
+      <Text style={T.h2}>Estoy despierto</Text>
+      <Text style={T.small}>Tu ventana se enciende para tu gente: saben que pueden escribirte o llamarte.</Text>
+      <View style={st.row}>
+        <Chip label="Ahora, 1 hora" on={false} onPress={() => onSetAwake(60)} color={colors.blue} />
+        <Chip label="2 horas" on={false} onPress={() => onSetAwake(120)} color={colors.blue} />
+        {awake && !!awakeUntil && <Chip label="Ya no" on={false} onPress={() => onSetAwake(0)} />}
+      </View>
+      {awake && !!awakeUntil && <Text style={[T.small, { color: colors.blue }]}>Despierto hasta las {hhmm(awakeUntil)}</Text>}
+      <Label>Mi horario</Label>
+      {list.length === 0 && !adding && <Text style={T.small}>Sin horario. Por ejemplo: de lunes a viernes de 9 a 10, o los sábados por la noche.</Text>}
+      {list.map((x) => (
+        <View key={x.id} style={st.row}>
+          <Text style={[T.body, { flex: 1 }]}>{daysText(x.days)}, de {x.start_time.slice(0, 5)} a {x.end_time.slice(0, 5)}</Text>
+          <Text style={[T.small, { color: colors.red }]} onPress={async () => { try { await repo.removeSchedule(x.id); load(); } catch (e: any) { Alert.alert('No se ha podido', e.message); } }}>Quitar</Text>
+        </View>
+      ))}
+      {adding ? (
+        <View style={{ gap: 8 }}>
+          <View style={st.row}>
+            <Chip label="L a V" on={days.join() === '1,2,3,4,5'} onPress={() => setDays([1, 2, 3, 4, 5])} color={colors.blue} />
+            <Chip label="Finde" on={days.join() === '6,7'} onPress={() => setDays([6, 7])} color={colors.blue} />
+            {DAYS.map((d, i) => <Chip key={d} label={d} on={days.includes(i + 1)} onPress={() => setDays(days.includes(i + 1) ? days.filter((x) => x !== i + 1) : [...days, i + 1].sort())} />)}
+          </View>
+          <Text style={T.small}>Desde</Text>
+          <View style={st.row}>{HOURS.slice(0, -1).map((h) => <Chip key={h} label={h} on={from === h} onPress={() => setFrom(h)} color={colors.blue} />)}</View>
+          <Text style={T.small}>Hasta</Text>
+          <View style={st.row}>{HOURS.slice(1).map((h) => <Chip key={h} label={h === '23:59' ? '00:00' : h} on={to === h} onPress={() => setTo(h)} color={colors.blue} />)}</View>
+          <View style={st.row}>
+            <Button small label="Guardar horario" tone="blue" disabled={days.length === 0 || from === to} onPress={save} style={{ flex: 1 }} />
+            <Button small label="Cancelar" tone="ghost" onPress={() => setAdding(false)} />
+          </View>
+        </View>
+      ) : (
+        <Text style={[T.small, { color: colors.blue, fontWeight: '600' }]} onPress={() => setAdding(true)}>+ Añadir horario</Text>
+      )}
+    </Card>
   );
 }
 

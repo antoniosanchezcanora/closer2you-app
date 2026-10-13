@@ -1,7 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { Appointment, PresencePerson, ShopRequestStatus, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
+import type { Appointment, AwakeSchedule, ChatGroup, GroupMessage, PresencePerson, ShopMessage, ShopRequestStatus, ShopThread, TableBooking, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
@@ -14,7 +14,7 @@ const isLive = (o: Offer) => o.active !== false && o.qty_left > 0 && new Date(o.
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 
 const baseShop = {
-  barrio: 'Palos de la Frontera', photo_url: null as string | null, use_photo: false, about: null, delivery_enabled: false, delivery_fee_cents: 0, delivery_free_from_cents: null, delivery_radius_m: 500, delivery_slots: [] as string[], delivery_by: null,
+  barrio: 'Palos de la Frontera', tables_enabled: false, tables_max_party: 8, photo_url: null as string | null, use_photo: false, about: null, delivery_enabled: false, delivery_fee_cents: 0, delivery_free_from_cents: null, delivery_radius_m: 500, delivery_slots: [] as string[], delivery_by: null,
 };
 
 // ------------------------------------------------------------------
@@ -30,7 +30,7 @@ function demoRepo(): Repo {
     { ...baseShop, id: 's2', name: 'Panadería La Espiga', category: 'panaderia', street: 'General Lacy', hours: 'Abierta hasta las 20:30', free_reservations_used: 2, tipo: 'tienda', fachada: 'pan' },
     { ...baseShop, id: 's4', name: 'Peluquería Marta', category: 'peluqueria', street: 'Tomás Bretón', hours: 'De 10:00 a 20:00', free_reservations_used: 0, tipo: 'tienda', fachada: 'otra', about: 'Corte, color y peinado.' },
     { ...baseShop, id: 's5', name: 'Librería La Buhardilla', category: 'otra', street: 'Fuencarral', hours: 'De 10:00 a 21:00', free_reservations_used: 0, tipo: 'tienda', fachada: 'libros', barrio: 'Chamberí' },
-    { ...baseShop, id: 's3', name: 'Bar La Parada', category: 'otra', street: 'General Lacy', hours: 'Cocina de 13:30 a 16:00', free_reservations_used: 1, tipo: 'restaurante', fachada: 'bar', delivery_enabled: true, delivery_fee_cents: 100, delivery_slots: ['14:00 a 15:30'], delivery_by: 'Ramón' },
+    { ...baseShop, id: 's3', name: 'Bar La Parada', category: 'otra', street: 'General Lacy', hours: 'Cocina de 13:30 a 16:00', free_reservations_used: 1, tipo: 'restaurante', fachada: 'bar', delivery_enabled: true, delivery_fee_cents: 100, delivery_slots: ['14:00 a 15:30'], delivery_by: 'Ramón', tables_enabled: true, tables_max_party: 10 },
   ];
   const offers: Offer[] = [
     { id: 'o1', shop_id: 's1', shop_name: 'Frutería Carmen', kind: 'rebaja', title: 'Manzanas reineta', unit: 'el kilo', price_cents: 168, old_price_cents: 240, qty_left: 8, until: at(240), created_at: at(-200), active: true },
@@ -42,6 +42,19 @@ function demoRepo(): Repo {
   );
   const followed = new Set(['s1', 's3', 's5']);
   let shopReq: ShopRequestStatus | null = null;
+  const scheds: AwakeSchedule[] = [{ id: 'as1', days: [1, 2, 3, 4, 5], start_time: '21:00', end_time: '23:30' }];
+  const mutedPeople = new Set<string>();
+  const sthreads: ShopThread[] = [{ id: 't1', shop_id: 's1', shop_name: 'Frutería Carmen', neighbour_id: 'u1', neighbour_name: 'Toni', last_at: at(-50), last_text: 'Te guardo las naranjas para zumo, pásate a las 7.' }];
+  const smsgs: Record<string, ShopMessage[]> = { t1: [
+    { id: 'sm1', sender_id: 'u1', from_shop: false, body: '¿Me guardas 2 kilos de naranjas para zumo?', created_at: at(-60) },
+    { id: 'sm2', sender_id: 'own1', from_shop: true, body: 'Te guardo las naranjas para zumo, pásate a las 7.', created_at: at(-50) },
+  ] };
+  const groupsD: ChatGroup[] = [{ id: 'g1', name: 'Cañas del jueves', last_at: at(-30), members: [{ id: 'u5', name: 'Lucía' }, { id: 'u7', name: 'Marta' }], last_text: '¿En La Parada a las 9?' }];
+  const gmsgs: Record<string, GroupMessage[]> = { g1: [
+    { id: 'gm1', sender_id: 'u1', sender_name: 'Toni', kind: 'sistema', body: 'Toni ha creado el grupo', created_at: at(-120) },
+    { id: 'gm2', sender_id: 'u5', sender_name: 'Lucía', kind: 'texto', body: '¿En La Parada a las 9?', created_at: at(-30) },
+  ] };
+  const bookings: TableBooking[] = [];
   const menus: Menu[] = [
     { id: 'm1', shop_id: 's3', shop_name: 'Bar La Parada', day: madridISODate(), starters: 'Lentejas estofadas o ensalada mixta', mains: 'Merluza a la plancha o pollo asado', includes: 'Postre o café, pan y bebida',
       price_cents: 1000, qty_total: 20, qty_left: 2, until: at(180), allergens: ['Gluten', 'Pescado', 'Huevo', 'Apio', 'Leche'], takeaway: true, delivery: true, active: true, created_at: at(-120) },
@@ -134,6 +147,43 @@ function demoRepo(): Repo {
     async claimShop(code) { await wait(); if (code.trim().toUpperCase() !== 'PACO2828') throw new Error('Ese código no existe. Revisa la tarjeta que te dejamos.'); return 'Carnicería Paco'; },
     async requestShop(r) { await wait(); shopReq = { ...r, id: 'sr1', status: 'pendiente', created_at: new Date().toISOString() }; },
     async myShopRequest() { await wait(); return shopReq; },
+    async schedules() { await wait(); return scheds.map((x) => ({ ...x })); },
+    async addSchedule(days, start, end) { await wait(); scheds.push({ id: 'as' + Date.now(), days, start_time: start, end_time: end }); },
+    async removeSchedule(id) { await wait(); const i = scheds.findIndex((x) => x.id === id); if (i >= 0) scheds.splice(i, 1); },
+    async mutes() { await wait(); return [...mutedPeople]; },
+    async mute(id) { await wait(); mutedPeople.add(id); },
+    async unmute(id) { await wait(); mutedPeople.delete(id); },
+    async shopThreads() { await wait(); return sthreads.map((x) => ({ ...x })); },
+    async openShopChat(shopId) {
+      await wait();
+      let t = sthreads.find((x) => x.shop_id === shopId);
+      if (!t) { t = { id: 't' + Date.now(), shop_id: shopId, shop_name: shops.find((x) => x.id === shopId)?.name ?? 'Tienda', neighbour_id: me.id, neighbour_name: me.name, last_at: new Date().toISOString(), last_text: null }; sthreads.unshift(t); smsgs[t.id] = []; }
+      return { ...t };
+    },
+    async shopMessages(id) { await wait(); return (smsgs[id] ?? []).map((x) => ({ ...x })); },
+    async sendShopMessage(id, body) { await wait(); (smsgs[id] ??= []).push({ id: 'sm' + Date.now(), sender_id: me.id, from_shop: false, body, created_at: new Date().toISOString() }); const t = sthreads.find((x) => x.id === id); if (t) { t.last_text = body; t.last_at = new Date().toISOString(); } },
+    async myShopThreads() { await wait(); return [{ id: 't9', shop_id: selected, shop_name: shopOf().name, neighbour_id: 'u4', neighbour_name: 'Ana', last_at: at(-12), last_text: '¿Me guardas una barra para las 8?' }]; },
+    async groups() { await wait(); return groupsD.map((x) => ({ ...x })); },
+    async createGroup(name, members) {
+      await wait();
+      const g: ChatGroup = { id: 'g' + Date.now(), name, last_at: new Date().toISOString(), members: members.map((id) => ({ id, name: people.find((p) => p.other_id === id)?.name ?? 'Vecino' })), last_text: null };
+      groupsD.unshift(g); gmsgs[g.id] = [{ id: 'gm' + Date.now(), sender_id: me.id, sender_name: me.name, kind: 'sistema', body: `${me.name} ha creado el grupo`, created_at: g.last_at }];
+      return { ...g };
+    },
+    async groupMessages(id) { await wait(); return (gmsgs[id] ?? []).map((x) => ({ ...x })); },
+    async sendGroupMessage(id, body) { await wait(); (gmsgs[id] ??= []).push({ id: 'gm' + Date.now(), sender_id: me.id, sender_name: me.name, kind: 'texto', body, created_at: new Date().toISOString() }); },
+    async leaveGroup(id) { await wait(); const i = groupsD.findIndex((x) => x.id === id); if (i >= 0) groupsD.splice(i, 1); },
+    async requestTable(shopId, groupId, party, atISO, note) {
+      await wait();
+      const sh = shops.find((x) => x.id === shopId)!;
+      if (!sh.tables_enabled) throw new Error('Este restaurante no acepta reservas de mesa en la app');
+      if (party > sh.tables_max_party) throw new Error(`Este restaurante acepta grupos de hasta ${sh.tables_max_party} personas`);
+      bookings.unshift({ id: 'b' + Date.now(), shop_id: shopId, shop_name: sh.name, requester_id: me.id, requester_name: me.name, group_id: groupId, party, at: atISO, note: note || null, status: 'pendiente', proposed_at: null, shop_note: null, created_at: new Date().toISOString() });
+      if (groupId) (gmsgs[groupId] ??= []).push({ id: 'gm' + Date.now(), sender_id: me.id, sender_name: me.name, kind: 'sistema', body: `${me.name} ha pedido mesa para ${party} en ${sh.name}. Esperando a que confirme.`, created_at: new Date().toISOString() });
+    },
+    async tableBookings(groupId) { await wait(); return bookings.filter((b) => (groupId ? b.group_id === groupId : b.requester_id === me.id)).map((x) => ({ ...x })); },
+    async shopTableBookings() { await wait(); return bookings.filter((b) => b.shop_id === selected).map((x) => ({ ...x })); },
+    async answerTable(id, status, proposedISO, note) { await wait(); const b = bookings.find((x) => x.id === id); if (b) { if (status === 'confirmada' && b.status === 'propuesta' && b.proposed_at) { b.at = b.proposed_at; b.proposed_at = null; } b.status = status; if (status === 'propuesta') b.proposed_at = proposedISO ?? null; if (note) b.shop_note = note; } },
     async people() { await wait(); return people.map((x) => ({ ...x })); },
     async myInviteCode() { await wait(); return 'LACY7K'; },
     async inviteByCode(code) { await wait(); if (!/^[A-Z2-9]{6}$/i.test(code.trim())) throw new Error('Ese código no existe. Revisa las letras.'); people.push({ link_id: 'l' + Date.now(), other_id: 'u' + Date.now(), name: 'Vecino nuevo', status: 'pendiente', i_sent: true, neighbour: true, i_share_vuelvo: false, i_share_cuidado: false, they_share_vuelvo: false, they_share_cuidado: false, awake: false, last_ok_at: null }); },
@@ -251,7 +301,7 @@ function demoRepo(): Repo {
 // ------------------------------------------------------------------
 // Supabase: las reglas (stock, estados, contador) viven en la base de datos.
 // ------------------------------------------------------------------
-const SHOP_COLS = 'id, name, category, street, barrio, photo_url, use_photo, hours, free_reservations_used, tipo, fachada, about, delivery_enabled, delivery_fee_cents, delivery_free_from_cents, delivery_radius_m, delivery_slots, delivery_by';
+const SHOP_COLS = 'id, name, category, street, barrio, tables_enabled, tables_max_party, photo_url, use_photo, hours, free_reservations_used, tipo, fachada, about, delivery_enabled, delivery_fee_cents, delivery_free_from_cents, delivery_radius_m, delivery_slots, delivery_by';
 const OFFER_COLS = 'id, shop_id, kind, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active';
 const PRO_COLS = 'id, user_id, kind, title, about, price_text, colegiado, seguro_rc, reta, with_minors, cert_menores, status';
 const MENU_COLS = 'id, shop_id, day, starters, mains, includes, price_cents, qty_total, qty_left, until, allergens, takeaway, delivery, active, created_at';
@@ -281,6 +331,14 @@ function liveRepo(): Repo {
   const mutedSet = async () => new Set(((ok(await sb.from('muted_shops').select('shop_id').eq('neighbour_id', await uid())) as any[]) ?? []).map((m) => m.shop_id));
   let shopCache: Shop | null = null;
   let selected: string | null = null;
+  const THREAD_COLS = 'id, shop_id, neighbour_id, last_at, shops(name), profiles(display_name)';
+  const threadsOf = async (rows: any[]): Promise<ShopThread[]> => {
+    const ids = rows.map((r) => r.id);
+    const last = ids.length ? (ok(await sb.from('shop_messages').select('thread_id, body, created_at').in('thread_id', ids).order('created_at', { ascending: false }).limit(200)) as any[]) : [];
+    return rows.map((r) => ({ id: r.id, shop_id: r.shop_id, shop_name: r.shops?.name ?? 'Tienda', neighbour_id: r.neighbour_id, neighbour_name: r.profiles?.display_name ?? 'Vecino', last_at: r.last_at, last_text: last.find((m) => m.thread_id === r.id)?.body ?? null }));
+  };
+  const BOOKING_COLS = 'id, shop_id, requester_id, group_id, party, at, note, status, proposed_at, shop_note, created_at, shops(name), profiles(display_name)';
+  const mapBooking = (r: any): TableBooking => ({ id: r.id, shop_id: r.shop_id, shop_name: r.shops?.name ?? 'Restaurante', requester_id: r.requester_id, requester_name: r.profiles?.display_name ?? 'Vecino', group_id: r.group_id, party: r.party, at: r.at, note: r.note, status: r.status, proposed_at: r.proposed_at, shop_note: r.shop_note, created_at: r.created_at });
 
   const repo: Repo = {
     mode: 'live',
@@ -376,6 +434,54 @@ function liveRepo(): Repo {
       const rows = ok(await sb.from('shop_requests').select('id, name, tipo, category, street, nif, independent, phone, status, created_at').eq('user_id', await uid()).order('created_at', { ascending: false }).limit(1)) as ShopRequestStatus[];
       return rows[0] ?? null;
     },
+    async schedules() { return ok(await sb.from('awake_schedules').select('id, days, start_time, end_time').eq('user_id', await uid()).order('created_at')) as AwakeSchedule[]; },
+    async addSchedule(days, start, end) { ok(await sb.from('awake_schedules').insert({ user_id: await uid(), days, start_time: start, end_time: end })); },
+    async removeSchedule(id) { ok(await sb.from('awake_schedules').delete().eq('id', id)); },
+    async mutes() { return ((ok(await sb.from('user_mutes').select('muted_id').eq('muter_id', await uid())) as any[]) ?? []).map((r) => r.muted_id); },
+    async mute(userId) { ok(await sb.from('user_mutes').upsert({ muter_id: await uid(), muted_id: userId }, { onConflict: 'muter_id,muted_id', ignoreDuplicates: true })); },
+    async unmute(userId) { ok(await sb.from('user_mutes').delete().eq('muter_id', await uid()).eq('muted_id', userId)); },
+    async shopThreads() { return threadsOf(ok(await sb.from('shop_threads').select(THREAD_COLS).eq('neighbour_id', await uid()).order('last_at', { ascending: false }).limit(50)) as any[]); },
+    async openShopChat(shopId) {
+      const tid = ok(await sb.rpc('open_shop_chat', { p_shop: shopId })) as string;
+      return (await threadsOf(ok(await sb.from('shop_threads').select(THREAD_COLS).eq('id', tid)) as any[]))[0];
+    },
+    async shopMessages(threadId) { return ok(await sb.from('shop_messages').select('id, sender_id, from_shop, body, created_at').eq('thread_id', threadId).order('created_at').limit(300)) as ShopMessage[]; },
+    async sendShopMessage(threadId, body) { ok(await sb.from('shop_messages').insert({ thread_id: threadId, sender_id: await uid(), body: body.trim() })); },
+    async myShopThreads() {
+      const shop = shopCache ?? (await repo.myShop());
+      if (!shop) return [];
+      return threadsOf(ok(await sb.from('shop_threads').select(THREAD_COLS).eq('shop_id', shop.id).order('last_at', { ascending: false }).limit(50)) as any[]);
+    },
+    async groups() {
+      const rows = ok(await sb.from('chat_groups').select('id, name, last_at, group_members(user_id, left_at, profiles(display_name))').order('last_at', { ascending: false }).limit(50)) as any[];
+      const me = await uid();
+      const ids = rows.map((r) => r.id);
+      const last = ids.length ? (ok(await sb.from('group_messages').select('group_id, body, created_at').in('group_id', ids).order('created_at', { ascending: false }).limit(200)) as any[]) : [];
+      return rows.map((r) => ({ id: r.id, name: r.name, last_at: r.last_at, last_text: last.find((m) => m.group_id === r.id)?.body ?? null,
+        members: (r.group_members ?? []).filter((m: any) => !m.left_at && m.user_id !== me).map((m: any) => ({ id: m.user_id, name: m.profiles?.display_name ?? 'Vecino' })) }));
+    },
+    async createGroup(name, members) {
+      const gid = ok(await sb.rpc('create_group', { p_name: name, p_members: members })) as string;
+      return (await repo.groups()).find((g) => g.id === gid)!;
+    },
+    async groupMessages(groupId) {
+      const rows = ok(await sb.from('group_messages').select('id, sender_id, kind, body, created_at, profiles(display_name)').eq('group_id', groupId).order('created_at').limit(300)) as any[];
+      return rows.map((r) => ({ id: r.id, sender_id: r.sender_id, sender_name: r.profiles?.display_name ?? null, kind: r.kind, body: r.body, created_at: r.created_at }));
+    },
+    async sendGroupMessage(groupId, body) { ok(await sb.from('group_messages').insert({ group_id: groupId, sender_id: await uid(), body: body.trim() })); },
+    async leaveGroup(groupId) { ok(await sb.rpc('leave_group', { p_group: groupId })); },
+    async requestTable(shopId, groupId, party, atISO, note) { ok(await sb.rpc('request_table', { p_shop: shopId, p_group: groupId, p_party: party, p_at: atISO, p_note: note })); },
+    async tableBookings(groupId) {
+      let q = sb.from('table_bookings').select(BOOKING_COLS).order('at', { ascending: false }).limit(30);
+      q = groupId ? q.eq('group_id', groupId) : q.eq('requester_id', await uid());
+      return (ok(await q) as any[]).map(mapBooking);
+    },
+    async shopTableBookings() {
+      const shop = shopCache ?? (await repo.myShop());
+      if (!shop) return [];
+      return (ok(await sb.from('table_bookings').select(BOOKING_COLS).eq('shop_id', shop.id).gte('at', new Date(Date.now() - 6 * 3600000).toISOString()).order('at').limit(60)) as any[]).map(mapBooking);
+    },
+    async answerTable(id, status, proposedISO, note) { ok(await sb.rpc('answer_table', { p_booking: id, p_status: status, p_proposed: proposedISO ?? null, p_note: note ?? null })); },
     async people() { return ((ok(await sb.rpc('my_people')) as any[]) ?? []) as Person[]; },
     async myInviteCode() { return ok(await sb.rpc('my_invite_code')) as string; },
     async inviteByCode(code) { ok(await sb.rpc('invite_by_code', { p_code: code })); },

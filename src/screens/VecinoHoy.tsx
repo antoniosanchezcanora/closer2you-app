@@ -28,7 +28,7 @@ export function offerBadge(o: Offer) {
 
 type Group = { shopId: string; shopName?: string; latest: string; offers: Offer[]; menu?: Menu };
 
-export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, onOpenShop, onChatWith }: { me: Me | null; myShop: Shop | null; unread: number; onVerified: () => void; onAvisos: () => void; onOpenShop: (shopId: string) => void; onChatWith: (userId: string) => void }) {
+export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, onOpenShop, onChatWith, onDirectory }: { me: Me | null; myShop: Shop | null; unread: number; onVerified: () => void; onAvisos: () => void; onOpenShop: (shopId: string) => void; onChatWith: (userId: string) => void; onDirectory: () => void }) {
   const [seg, setSeg] = useState<'barrio' | 'plaza' | 'ciudad' | 'agenda'>('barrio');
   const [follows, setFollows] = useState<string[]>([]);
   const [discover, setDiscover] = useState(false);
@@ -195,6 +195,7 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
         {seg === 'agenda' && <Agenda me={me} shop={myShop} />}
         {verified && seg === 'barrio' && <Text style={T.small}>{followedHere.length === 0 ? 'Tu barrio lo haces tú: sigue las tiendas que te gustan y te avisamos las primeras cuando publiquen.' : `Sigues ${followedHere.length} ${followedHere.length === 1 ? 'tienda' : 'tiendas'} de ${myBarrio}. Te avisan antes que a nadie.`}</Text>}
         {verified && seg === 'plaza' && <Text style={T.small}>Todo lo publicado hoy en {myBarrio}, sigas a la tienda o no. Por orden de hora, nunca por quién paga.</Text>}
+        {verified && seg === 'plaza' && <Button small label={me?.fase2 ? 'Ver todas las tiendas y profesionales' : 'Ver todas las tiendas'} tone="soft" onPress={onDirectory} />}
         {verified && seg === 'ciudad' && <Text style={T.small}>Las tiendas que sigues fuera de tu barrio. Tu gente de otros barrios está en Vecinos, Mi gente.</Text>}
         {verified && ((seg === 'barrio' && (followedHere.length === 0 || discover)) || (seg === 'ciudad' && (followedAway.length === 0 || discover))) && (
           <Card style={{ gap: 8 }}>

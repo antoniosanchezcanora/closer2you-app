@@ -19,10 +19,8 @@ const ago = (iso: string) => {
 };
 
 // Pestaña Vecinos. Fase 2: solo cuentas de prueba hasta que pase la revisión de seguridad.
-export default function Vecinos({ me, openConv, onConvShown }: { me: Me | null; openConv?: Conversation | null; onConvShown?: () => void }) {
-  const [seg, setSeg] = useState<'tablon' | 'mensajes' | 'mio' | 'gente'>(openConv ? 'gente' : 'tablon');
-  const [chat, setChat] = useState<Conversation | null>(openConv ?? null);
-  useEffect(() => { if (openConv) { Promise.resolve().then(() => { setChat(openConv); onConvShown?.(); }); } }, [openConv, onConvShown]);
+export default function Vecinos({ me, onOpenChat }: { me: Me | null; onOpenChat: (c: Conversation) => void }) {
+  const [seg, setSeg] = useState<'gente' | 'tablon'>('gente');
 
   if (!me?.fase2 || !me.verified) {
     return (
@@ -36,7 +34,6 @@ export default function Vecinos({ me, openConv, onConvShown }: { me: Me | null; 
       </ScrollView>
     );
   }
-  if (chat) return <Chat me={me} conv={chat} onBack={() => setChat(null)} />;
 
   return (
     <View style={{ flex: 1 }}>
@@ -45,12 +42,10 @@ export default function Vecinos({ me, openConv, onConvShown }: { me: Me | null; 
           <Text style={T.title}>Vecinos</Text>
           <Badge label="Fase 2 · prueba" color={colors.blue} soft={colors.blueSoft} />
         </View>
-        <Segment items={[{ id: 'tablon', label: 'Tablón' }, { id: 'mensajes', label: 'Mensajes' }, { id: 'gente', label: 'Mi gente' }, { id: 'mio', label: 'Lo mío' }]} value={seg} onChange={setSeg} />
+        <Segment items={[{ id: 'gente', label: 'Mi gente' }, { id: 'tablon', label: 'Tablón' }]} value={seg} onChange={setSeg} />
       </View>
-      {seg === 'tablon' && <Tablon me={me} onOpenChat={setChat} />}
-      {seg === 'mensajes' && <Mensajes onOpen={setChat} />}
-      {seg === 'gente' && <MiGente me={me} onOpenChat={setChat} />}
-      {seg === 'mio' && <LoMio me={me} />}
+      {seg === 'gente' && <MiGente me={me} onOpenChat={onOpenChat} />}
+      {seg === 'tablon' && <Tablon me={me} onOpenChat={onOpenChat} />}
     </View>
   );
 }
@@ -63,9 +58,10 @@ function Tablon({ me, onOpenChat }: { me: Me; onOpenChat: (c: Conversation) => v
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [sent, setSent] = useState<string[]>([]);
+  const [muted, setMuted] = useState<string[]>([]);
 
   const load = useCallback(async () => {
-    try { setList(await repo.requests()); } catch (e: any) { Alert.alert('No se ha podido cargar', e.message); } finally { setLoading(false); }
+    try { const [r, m] = await Promise.all([repo.requests(), repo.mutes().catch(() => [] as string[])]); setList(r); setMuted(m); } catch (e: any) { Alert.alert('No se ha podido cargar', e.message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { Promise.resolve().then(load); }, [load]);
 
@@ -83,7 +79,7 @@ function Tablon({ me, onOpenChat }: { me: Me; onOpenChat: (c: Conversation) => v
   };
 
   if (creating) return <NuevaPeticion onDone={() => { setCreating(false); load(); }} />;
-  const shown = list.filter((r) => r.kind === kind && r.status === 'abierta' && r.author_id !== me.id);
+  const shown = list.filter((r) => r.kind === kind && r.status === 'abierta' && r.author_id !== me.id && !muted.includes(r.author_id));
 
   return (
     <View style={{ flex: 1 }}>
@@ -153,11 +149,12 @@ function NuevaPeticion({ onDone }: { onDone: () => void }) {
 }
 
 // ------------------------------------------------------------------
-function Mensajes({ onOpen }: { onOpen: (c: Conversation) => void }) {
+export function VecinoChats({ onOpen }: { onOpen: (c: Conversation) => void }) {
   const [list, setList] = useState<Conversation[]>([]);
+  const [muted, setMuted] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
-    try { setList(await repo.conversations()); } catch (e: any) { Alert.alert('No se ha podido cargar', e.message); } finally { setLoading(false); }
+    try { const [c, m] = await Promise.all([repo.conversations(), repo.mutes().catch(() => [] as string[])]); setList(c); setMuted(m); } catch (e: any) { Alert.alert('No se ha podido cargar', e.message); } finally { setLoading(false); }
   }, []);
   useEffect(() => { Promise.resolve().then(load); }, [load]);
 
@@ -166,8 +163,10 @@ function Mensajes({ onOpen }: { onOpen: (c: Conversation) => void }) {
     catch (e: any) { Alert.alert('No se ha podido', e.message); }
   };
 
-  const pendientes = list.filter((c) => c.status === 'pendiente' && !c.i_started);
-  const resto = list.filter((c) => !(c.status === 'pendiente' && !c.i_started) && c.status !== 'rechazada');
+  // Los chats de gente silenciada no salen aquí (ni avisan). Ellos no lo saben.
+  const visibles = list.filter((c) => !muted.includes(c.other_id));
+  const pendientes = visibles.filter((c) => c.status === 'pendiente' && !c.i_started);
+  const resto = visibles.filter((c) => !(c.status === 'pendiente' && !c.i_started) && c.status !== 'rechazada');
   return (
     <ScrollView contentContainerStyle={st.wrap} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       {pendientes.length > 0 && <Label>Quieren ayudarte</Label>}
@@ -205,7 +204,7 @@ const REASONS: { id: ReportReason; label: string }[] = [
   { id: 'acoso', label: 'Acoso o insultos' }, { id: 'estafa', label: 'Intento de estafa' }, { id: 'cobro', label: 'Quiere cobrar un favor' }, { id: 'inapropiado', label: 'Contenido inapropiado' }, { id: 'otro', label: 'Otra cosa' },
 ];
 
-function Chat({ me, conv, onBack }: { me: Me; conv: Conversation; onBack: () => void }) {
+export function Chat({ me, conv, onBack }: { me: Me; conv: Conversation; onBack: () => void }) {
   const [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [reporting, setReporting] = useState(false);
@@ -278,7 +277,7 @@ function Chat({ me, conv, onBack }: { me: Me; conv: Conversation; onBack: () => 
 }
 
 // ------------------------------------------------------------------
-function LoMio({ me }: { me: Me }) {
+export function LoMio({ me }: { me: Me }) {
   const [level, setLevel] = useState<Level | null>(null);
   const [mine, setMine] = useState<NeighbourRequest[]>([]);
   const [convs, setConvs] = useState<Conversation[]>([]);

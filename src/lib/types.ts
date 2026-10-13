@@ -60,12 +60,14 @@ export type Shop = {
   delivery_slots: string[];
   delivery_by: string | null;
   barrio: string;
+  tables_enabled: boolean; // restaurante que acepta reservas de mesa en la app
+  tables_max_party: number;
   photo_url: string | null; // foto de la fachada subida por la tienda
   use_photo: boolean; // true: se ve la foto; false: el dibujo de Stoop
 };
 
 // Lo que la tienda puede cambiar de su ficha y de su entrega.
-export type ShopSettings = Pick<Shop, 'hours' | 'about' | 'use_photo' | 'delivery_enabled' | 'delivery_fee_cents' | 'delivery_free_from_cents' | 'delivery_radius_m' | 'delivery_slots' | 'delivery_by'>;
+export type ShopSettings = Pick<Shop, 'hours' | 'about' | 'use_photo' | 'tables_enabled' | 'tables_max_party' | 'delivery_enabled' | 'delivery_fee_cents' | 'delivery_free_from_cents' | 'delivery_radius_m' | 'delivery_slots' | 'delivery_by'>;
 
 export type Offer = {
   id: string;
@@ -217,6 +219,12 @@ export type Person = {
 };
 export type CareAlert = { id: string; user_id: string; user_name: string; status: 'abierta' | 'atendida' | 'cerrada'; responder_name: string | null; created_at: string; my_answer: 'voy' | 'no_puedo' | null };
 export type Walk = { id: string; user_id: string; user_name: string; status: 'activa' | 'llegado' | 'cancelada'; eta_at: string; lat: number | null; lng: number | null; pos_at: string | null; created_at: string; ended_at: string | null };
+export type AwakeSchedule = { id: string; days: number[]; start_time: string; end_time: string };
+export type ShopThread = { id: string; shop_id: string; shop_name: string; neighbour_id: string; neighbour_name: string; last_at: string; last_text: string | null };
+export type ShopMessage = { id: string; sender_id: string; from_shop: boolean; body: string; created_at: string };
+export type ChatGroup = { id: string; name: string; last_at: string; members: { id: string; name: string }[]; last_text: string | null };
+export type GroupMessage = { id: string; sender_id: string | null; sender_name: string | null; kind: 'texto' | 'sistema'; body: string; created_at: string };
+export type TableBooking = { id: string; shop_id: string; shop_name: string; requester_id: string; requester_name: string; group_id: string | null; party: number; at: string; note: string | null; status: 'pendiente' | 'confirmada' | 'propuesta' | 'rechazada' | 'cancelada'; proposed_at: string | null; shop_note: string | null; created_at: string };
 export type PresencePerson = { other_id: string; name: string; online: boolean; awake: boolean };
 export type MyPresence = { last_ok_at: string | null; awake_until: string | null };
 
@@ -298,6 +306,29 @@ export interface Repo {
   touchPresence(): Promise<void>;
   peoplePresence(): Promise<PresencePerson[]>;
   openDirectChat(userId: string): Promise<Conversation>;
+  // Horario de «despierto» y silenciar
+  schedules(): Promise<AwakeSchedule[]>;
+  addSchedule(days: number[], start: string, end: string): Promise<void>;
+  removeSchedule(id: string): Promise<void>;
+  mutes(): Promise<string[]>;
+  mute(userId: string): Promise<void>;
+  unmute(userId: string): Promise<void>;
+  // Chats con tiendas
+  shopThreads(): Promise<ShopThread[]>; // como vecino
+  openShopChat(shopId: string): Promise<ShopThread>;
+  shopMessages(threadId: string): Promise<ShopMessage[]>;
+  sendShopMessage(threadId: string, body: string): Promise<void>;
+  myShopThreads(): Promise<ShopThread[]>; // como tienda (la elegida)
+  // Grupos y reservas de mesa
+  groups(): Promise<ChatGroup[]>;
+  createGroup(name: string, members: string[]): Promise<ChatGroup>;
+  groupMessages(groupId: string): Promise<GroupMessage[]>;
+  sendGroupMessage(groupId: string, body: string): Promise<void>;
+  leaveGroup(groupId: string): Promise<void>;
+  requestTable(shopId: string, groupId: string | null, party: number, atISO: string, note: string): Promise<void>;
+  tableBookings(groupId?: string): Promise<TableBooking[]>; // las mías o las de un grupo
+  shopTableBookings(): Promise<TableBooking[]>; // como restaurante
+  answerTable(id: string, status: 'confirmada' | 'rechazada' | 'propuesta' | 'cancelada', proposedISO?: string | null, note?: string): Promise<void>;
   // Cuidarnos
   myPresence(): Promise<MyPresence>;
   imOk(): Promise<void>;

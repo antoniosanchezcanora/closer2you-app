@@ -23,6 +23,8 @@ export default function TiendaAjustes({ onDone }: { onDone: () => void }) {
   const [radius, setRadius] = useState(500);
   const [slots, setSlots] = useState<string[]>([]);
   const [by, setBy] = useState('');
+  const [tables, setTables] = useState(false);
+  const [maxParty, setMaxParty] = useState(8);
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const { width } = useWindowDimensions();
@@ -32,7 +34,7 @@ export default function TiendaAjustes({ onDone }: { onDone: () => void }) {
       if (!s) return;
       setShop(s); setHours(s.hours ?? ''); setAbout(s.about ?? ''); setEnabled(s.delivery_enabled);
       setFee(toText(s.delivery_fee_cents)); setFree(toText(s.delivery_free_from_cents)); setRadius(s.delivery_radius_m);
-      setSlots(s.delivery_slots ?? []); setBy(s.delivery_by ?? '');
+      setSlots(s.delivery_slots ?? []); setBy(s.delivery_by ?? ''); setTables(!!s.tables_enabled); setMaxParty(s.tables_max_party ?? 8);
     }).catch((e) => Alert.alert('Error', e.message));
   }, []);
 
@@ -44,6 +46,7 @@ export default function TiendaAjustes({ onDone }: { onDone: () => void }) {
         hours: hours.trim() || null, about: about.trim() || null, delivery_enabled: enabled,
         delivery_fee_cents: toCents(fee), delivery_free_from_cents: toCents(free) || null, delivery_radius_m: radius,
         delivery_slots: slots, delivery_by: by.trim() || null,
+        ...(shop?.tipo === 'restaurante' ? { tables_enabled: tables, tables_max_party: maxParty } : {}),
       });
       Alert.alert('Guardado', 'Los vecinos ya ven los cambios en tu ficha.');
       onDone();
@@ -102,6 +105,27 @@ export default function TiendaAjustes({ onDone }: { onDone: () => void }) {
       <TextInput value={hours} onChangeText={setHours} placeholder="Abierta hasta las 21:00" accessibilityLabel="Horario" style={st.input} maxLength={60} />
       <Label>Quién está detrás</Label>
       <TextInput value={about} onChangeText={setAbout} placeholder="Cuéntales a tus vecinos quién eres y qué vendes" accessibilityLabel="Presentación" style={[st.input, { minHeight: 90, textAlignVertical: 'top', paddingTop: 12 }]} multiline maxLength={280} />
+
+      {shop?.tipo === 'restaurante' && (
+        <>
+          <Label>Reservas de mesa</Label>
+          <View style={st.card}>
+            <View style={st.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={T.strong}>Acepto reservas de mesa en la app</Text>
+                <Text style={T.small}>Los vecinos te piden mesa (solos o desde un grupo) y tú confirmas, propones otra hora o dices que no, en Mensajes.</Text>
+              </View>
+              <Switch value={tables} onValueChange={setTables} trackColor={{ true: colors.wine, false: '#D5D9DE' }} accessibilityLabel="Acepto reservas de mesa" />
+            </View>
+          </View>
+          {tables && (
+            <>
+              <Text style={T.small}>Grupo más grande que aceptas</Text>
+              <View style={st.wrapRow}>{[4, 6, 8, 10, 12, 16, 20].map((n) => <Chip key={n} label={`${n} personas`} on={maxParty === n} onPress={() => setMaxParty(n)} color={colors.wine} />)}</View>
+            </>
+          )}
+        </>
+      )}
 
       <Label>Entrega a domicilio</Label>
       <View style={st.card}>

@@ -10,7 +10,7 @@ import { offerBadge } from './VecinoHoy';
 
 type Filtro = 'todas' | 'sigo' | 'tiendas' | 'restaurantes' | 'domicilio';
 
-export default function Tiendas({ openShopId, onCloseShop, onOpenShop, verified }: { openShopId: string | null; onCloseShop: () => void; onOpenShop: (id: string) => void; verified: boolean }) {
+export default function Tiendas({ openShopId, onCloseShop, onOpenShop, verified, onWrite }: { openShopId: string | null; onCloseShop: () => void; onOpenShop: (id: string) => void; verified: boolean; onWrite: (shopId: string) => void }) {
   const [shops, setShops] = useState<Shop[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -43,7 +43,7 @@ export default function Tiendas({ openShopId, onCloseShop, onOpenShop, verified 
   if (open) {
     return (
       <View style={{ flex: 1 }}>
-        <ShopDetail shop={open} offers={offers.filter((o) => o.shop_id === open.id)} menu={menus.find((m) => m.shop_id === open.id)} onBack={onCloseShop} onReserve={setTarget} following={follows.includes(open.id)} fans={fans[open.id] ?? 0} onFollow={() => toggleFollow(open.id)} />
+        <ShopDetail shop={open} offers={offers.filter((o) => o.shop_id === open.id)} menu={menus.find((m) => m.shop_id === open.id)} onBack={onCloseShop} onReserve={setTarget} following={follows.includes(open.id)} fans={fans[open.id] ?? 0} onFollow={() => toggleFollow(open.id)} onWrite={() => onWrite(open.id)} />
         <ReserveSheet target={target} onClose={() => setTarget(null)} onDone={done} />
       </View>
     );
@@ -63,7 +63,7 @@ export default function Tiendas({ openShopId, onCloseShop, onOpenShop, verified 
   return (
     <ScrollView contentContainerStyle={st.wrap} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       <View>
-        <Text style={T.kicker}>COMERCIO INDEPENDIENTE DE TU CALLE</Text>
+        <Text style={T.kicker}>TODAS LAS TIENDAS DEL BARRIO</Text>
         <Text style={T.title}>Tiendas</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -102,7 +102,7 @@ export default function Tiendas({ openShopId, onCloseShop, onOpenShop, verified 
   );
 }
 
-function ShopDetail({ shop, offers, menu, onBack, onReserve, following, fans, onFollow }: { shop: Shop; offers: Offer[]; menu?: Menu; onBack: () => void; onReserve: (t: ReserveTarget) => void; following: boolean; fans: number; onFollow: () => void }) {
+function ShopDetail({ shop, offers, menu, onBack, onReserve, following, fans, onFollow, onWrite }: { shop: Shop; offers: Offer[]; menu?: Menu; onBack: () => void; onReserve: (t: ReserveTarget) => void; following: boolean; fans: number; onFollow: () => void; onWrite: () => void }) {
   const { width } = useWindowDimensions();
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
@@ -119,7 +119,11 @@ function ShopDetail({ shop, offers, menu, onBack, onReserve, following, fans, on
           {!!shop.hours && <Text style={[T.small, { color: colors.green, fontWeight: '600' }]}>{shop.hours}</Text>}
           <Text style={T.small}>{shop.street}{shop.barrio ? ` · ${shop.barrio}` : ''}{fans ? ` · la siguen ${fans} ${fans === 1 ? 'vecino' : 'vecinos'}` : ''}</Text>
         </View>
-        <Button label={following ? 'Siguiendo · te avisa la primera' : 'Seguir esta tienda'} tone={following ? 'soft' : 'primary'} onPress={onFollow} />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Button label={following ? 'Siguiendo' : 'Seguir'} tone={following ? 'soft' : 'primary'} onPress={onFollow} style={{ flex: 1 }} />
+          <Button label={shop.tipo === 'restaurante' ? 'Escribir o pedir mesa' : 'Escribir a la tienda'} tone="blue" onPress={onWrite} style={{ flex: 1.4 }} />
+        </View>
+        {following && <Text style={T.small}>Te avisa la primera cuando publique algo.</Text>}
 
         {menu && (
           <Card style={{ gap: 8 }}>
