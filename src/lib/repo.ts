@@ -1,3 +1,4 @@
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
 import type { Appointment, ShopRequestStatus, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
@@ -13,7 +14,7 @@ const isLive = (o: Offer) => o.active !== false && o.qty_left > 0 && new Date(o.
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
 
 const baseShop = {
-  barrio: 'Palos de la Frontera', about: null, delivery_enabled: false, delivery_fee_cents: 0, delivery_free_from_cents: null, delivery_radius_m: 500, delivery_slots: [] as string[], delivery_by: null,
+  barrio: 'Palos de la Frontera', photo_url: null as string | null, use_photo: false, about: null, delivery_enabled: false, delivery_fee_cents: 0, delivery_free_from_cents: null, delivery_radius_m: 500, delivery_slots: [] as string[], delivery_by: null,
 };
 
 // ------------------------------------------------------------------
@@ -194,6 +195,7 @@ function demoRepo(): Repo {
     selectShop(id) { selected = id; },
     async myShop() { await wait(); return { ...shopOf() }; },
     async updateShop(settings) { await wait(); Object.assign(shopOf(), settings); },
+    async uploadShopPhoto(uri) { await wait(); Object.assign(shopOf(), { photo_url: uri, use_photo: true }); return uri; },
     async shopReservations() { await wait(); return res.filter((r) => r.shop_id === selected).map((r) => ({ ...r })); },
     async setStatus(id, status) {
       await wait();
@@ -237,7 +239,7 @@ function demoRepo(): Repo {
 // ------------------------------------------------------------------
 // Supabase: las reglas (stock, estados, contador) viven en la base de datos.
 // ------------------------------------------------------------------
-const SHOP_COLS = 'id, name, category, street, barrio, hours, free_reservations_used, tipo, fachada, about, delivery_enabled, delivery_fee_cents, delivery_free_from_cents, delivery_radius_m, delivery_slots, delivery_by';
+const SHOP_COLS = 'id, name, category, street, barrio, photo_url, use_photo, hours, free_reservations_used, tipo, fachada, about, delivery_enabled, delivery_fee_cents, delivery_free_from_cents, delivery_radius_m, delivery_slots, delivery_by';
 const OFFER_COLS = 'id, shop_id, kind, title, unit, price_cents, old_price_cents, qty_left, until, created_at, active';
 const PRO_COLS = 'id, user_id, kind, title, about, price_text, colegiado, seguro_rc, reta, with_minors, cert_menores, status';
 const MENU_COLS = 'id, shop_id, day, starters, mains, includes, price_cents, qty_total, qty_left, until, allergens, takeaway, delivery, active, created_at';
@@ -481,6 +483,21 @@ function liveRepo(): Repo {
       const shop = shopCache ?? (await repo.myShop());
       if (!shop) throw new Error('No tienes una tienda dada de alta');
       ok(await sb.from('shops').update(settings).eq('id', shop.id));
+    },
+    async uploadShopPhoto(uri) {
+      const shop = shopCache ?? (await repo.myShop());
+      if (!shop) throw new Error('No tienes una tienda dada de alta');
+      // Se reduce a 1200 px de ancho para que pese poco (unos 200 KB) y cargue rápido en la calle.
+      const ctx = ImageManipulator.manipulate(uri);
+      ctx.resize({ width: 1200, height: null });
+      const img = await (await ctx.renderAsync()).saveAsync({ format: SaveFormat.JPEG, compress: 0.7 });
+      const body = await (await fetch(img.uri)).arrayBuffer();
+      const path = `${shop.id}/${Date.now()}.jpg`;
+      const up = await sb.storage.from('fachadas').upload(path, body, { contentType: 'image/jpeg', upsert: false });
+      if (up.error) throw new Error(up.error.message);
+      const url = sb.storage.from('fachadas').getPublicUrl(path).data.publicUrl;
+      ok(await sb.from('shops').update({ photo_url: url, use_photo: true }).eq('id', shop.id));
+      return url;
     },
     async shopReservations() {
       const shop = shopCache ?? (await repo.myShop());

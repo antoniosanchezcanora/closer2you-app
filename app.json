@@ -29,6 +29,14 @@
         {
           "locationWhenInUsePermission": "Stoop usa tu ubicación solo mientras compartes «Vuelvo a casa» con tu gente y la app está abierta."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Stoop usa tus fotos solo si eliges una para la imagen de tu tienda.",
+          "cameraPermission": "Stoop usa la cámara solo si haces una foto de la fachada de tu tienda.",
+          "microphonePermission": false
+        }
       ]
     ]
   }

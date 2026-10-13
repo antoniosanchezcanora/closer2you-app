@@ -1,6 +1,8 @@
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { Button, Chip, Label, Note, T } from '../components/ui';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ShopImage } from '../components/art';
+import { Button, Chip, Label, Note, Segment, T } from '../components/ui';
 import { repo } from '../lib/repo';
 import type { Shop } from '../lib/types';
 import { colors } from '../theme';
@@ -22,6 +24,8 @@ export default function TiendaAjustes({ onDone }: { onDone: () => void }) {
   const [slots, setSlots] = useState<string[]>([]);
   const [by, setBy] = useState('');
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const { width } = useWindowDimensions();
 
   useEffect(() => {
     repo.myShop().then((s) => {
@@ -50,6 +54,29 @@ export default function TiendaAjustes({ onDone }: { onDone: () => void }) {
     }
   };
 
+  const pick = async (camera: boolean) => {
+    try {
+      const perm = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Sin permiso', camera ? 'Activa la cámara para Expo Go en Ajustes del móvil.' : 'Activa el acceso a fotos para Expo Go en Ajustes del móvil.'); return; }
+      const opts: ImagePicker.ImagePickerOptions = { mediaTypes: 'images', quality: 0.9 };
+      const r = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+      if (r.canceled || !r.assets?.[0]) return;
+      setPhotoBusy(true);
+      const url = await repo.uploadShopPhoto(r.assets[0].uri);
+      setShop((x) => (x ? { ...x, photo_url: url, use_photo: true } : x));
+    } catch (e: any) {
+      Alert.alert('No se ha podido subir', e.message);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+  const setPhotoMode = async (on: boolean) => {
+    if (!shop) return;
+    if (on && !shop.photo_url) { Alert.alert('Primero sube una foto', 'Haz una foto de la fachada o elígela de tu galería.'); return; }
+    setShop({ ...shop, use_photo: on });
+    try { await repo.updateShop({ use_photo: on }); } catch (e: any) { Alert.alert('No se ha podido', e.message); }
+  };
+
   const toggleSlot = (f: string) => setSlots(slots.includes(f) ? slots.filter((x) => x !== f) : [...slots, f]);
 
   return (
@@ -61,6 +88,15 @@ export default function TiendaAjustes({ onDone }: { onDone: () => void }) {
         <Text style={T.kicker}>{shop?.name?.toUpperCase() ?? 'TU TIENDA'}</Text>
         <Text style={T.title}>Tu ficha y entregas</Text>
       </View>
+
+      <Label>Imagen de tu tienda</Label>
+      {shop && <ShopImage shop={shop} width={width - 32} height={Math.round((width - 32) * 0.56)} style={{ borderRadius: 16 }} />}
+      <Segment items={[{ id: 'dibujo', label: 'Dibujo de Stoop' }, { id: 'foto', label: 'Mi foto' }]} value={shop?.use_photo ? 'foto' : 'dibujo'} onChange={(k) => setPhotoMode(k === 'foto')} />
+      <View style={st.row}>
+        <Button small label={photoBusy ? 'Subiendo…' : 'Hacer foto'} tone="soft" busy={photoBusy} onPress={() => pick(true)} style={{ flex: 1 }} />
+        <Button small label="Elegir de la galería" tone="soft" disabled={photoBusy} onPress={() => pick(false)} style={{ flex: 1 }} />
+      </View>
+      <Note>Mejor de frente, con luz de día y el rótulo a la vista. Que no salgan caras de personas ni matrículas. Si prefieres el dibujo, te lo hacemos nosotros con tu rótulo.</Note>
 
       <Label>Horario</Label>
       <TextInput value={hours} onChangeText={setHours} placeholder="Abierta hasta las 21:00" accessibilityLabel="Horario" style={st.input} maxLength={60} />

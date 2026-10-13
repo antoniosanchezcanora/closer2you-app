@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { View, ViewStyle } from 'react-native';
+import { Image, View, ViewStyle } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { CALLE_SVG, FACHADAS } from '../lib/art';
-import type { Fachada as FachadaKind } from '../lib/types';
+import type { Fachada as FachadaKind, Shop } from '../lib/types';
 
 // La calle dibujada en perspectiva, como en el diseño (sin rótulos: las ofertas van en tarjetas debajo).
 export function Calle({ width, style }: { width: number; style?: ViewStyle }) {
@@ -31,4 +31,13 @@ export function Fachada({ kind, name, width, height, style }: { kind: FachadaKin
       <SvgXml xml={xml} width={width} height={Math.max(h, Math.round((width * 200) / 358))} preserveAspectRatio="xMidYMin slice" />
     </View>
   );
+}
+
+// Imagen de la tienda: su foto si la ha subido y la quiere usar; si no, el dibujo de Stoop.
+export function ShopImage({ shop, width, height, style }: { shop: Pick<Shop, 'fachada' | 'name' | 'photo_url' | 'use_photo'>; width: number; height?: number; style?: ViewStyle }) {
+  const h = height ?? Math.round((width * 200) / 358);
+  if (shop.use_photo && shop.photo_url) {
+    return <Image source={{ uri: shop.photo_url }} style={[{ width, height: h, overflow: 'hidden' }, style as any]} resizeMode="cover" accessibilityLabel={`Fachada de ${shop.name}`} />;
+  }
+  return <Fachada kind={shop.fachada} name={shop.name} width={width} height={height} style={style} />;
 }

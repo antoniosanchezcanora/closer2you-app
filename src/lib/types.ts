@@ -60,10 +60,12 @@ export type Shop = {
   delivery_slots: string[];
   delivery_by: string | null;
   barrio: string;
+  photo_url: string | null; // foto de la fachada subida por la tienda
+  use_photo: boolean; // true: se ve la foto; false: el dibujo de Stoop
 };
 
 // Lo que la tienda puede cambiar de su ficha y de su entrega.
-export type ShopSettings = Pick<Shop, 'hours' | 'about' | 'delivery_enabled' | 'delivery_fee_cents' | 'delivery_free_from_cents' | 'delivery_radius_m' | 'delivery_slots' | 'delivery_by'>;
+export type ShopSettings = Pick<Shop, 'hours' | 'about' | 'use_photo' | 'delivery_enabled' | 'delivery_fee_cents' | 'delivery_free_from_cents' | 'delivery_radius_m' | 'delivery_slots' | 'delivery_by'>;
 
 export type Offer = {
   id: string;
@@ -342,6 +344,7 @@ export interface Repo {
   selectShop(shopId: string): void;
   myShop(): Promise<Shop | null>;
   updateShop(settings: Partial<ShopSettings>): Promise<void>;
+  uploadShopPhoto(localUri: string): Promise<string>; // la reduce, la sube y la deja puesta
   shopReservations(): Promise<Reservation[]>;
   setStatus(reservationId: string, status: ReservationStatus): Promise<void>;
   publishOffer(offer: NewOffer): Promise<void>;

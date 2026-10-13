@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { Fachada } from '../components/art';
+import { ShopImage } from '../components/art';
 import { ReserveSheet, ReserveTarget } from '../components/ReserveSheet';
 import { Badge, Button, Card, Chip, Label, Note, T } from '../components/ui';
 import { repo } from '../lib/repo';
@@ -80,7 +80,7 @@ export default function Tiendas({ openShopId, onCloseShop, onOpenShop, verified 
           const m = menus.find((x) => x.shop_id === s.id);
           return (
             <Pressable key={s.id} accessibilityRole="button" onPress={() => onOpenShop(s.id)} style={({ pressed }) => [st.row, i > 0 && st.sep, pressed && { opacity: 0.7 }]}>
-              <Fachada kind={s.fachada} name={s.name} width={84} height={64} style={{ borderRadius: 12 }} />
+              <ShopImage shop={s} width={84} height={64} style={{ borderRadius: 12 }} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={T.strong}>{s.name}</Text>
                 <Text style={T.small}>{s.tipo === 'restaurante' ? 'Restaurante' : 'Tienda'}{s.delivery_enabled ? ' · recogida y a domicilio' : ' · recogida'}{s.barrio && s.barrio !== 'Palos de la Frontera' ? ` · ${s.barrio}` : ''}</Text>
@@ -107,7 +107,7 @@ function ShopDetail({ shop, offers, menu, onBack, onReserve, following, fans, on
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
       <View>
-        <Fachada kind={shop.fachada} name={shop.name} width={width} height={Math.round(width * 0.56)} />
+        <ShopImage shop={shop} width={width} height={Math.round(width * 0.56)} />
         <Pressable accessibilityRole="button" accessibilityLabel="Volver" onPress={onBack} style={st.back}><Text style={{ fontSize: 26, color: colors.ink, marginTop: -3 }}>‹</Text></Pressable>
       </View>
       <View style={{ padding: 16, gap: 10 }}>
