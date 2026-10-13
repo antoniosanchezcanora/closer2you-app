@@ -163,6 +163,39 @@ export type MenuReservation = {
   created_at: string;
 };
 
+// ------------------------------------------------------------------
+// Fase 2: vecinos (solo cuentas con fase2)
+// ------------------------------------------------------------------
+export type RequestKind = 'pido' | 'ofrezco';
+export type RequestCategory = 'compra' | 'recado' | 'prestamo' | 'compania' | 'otro';
+export type NeighbourRequest = {
+  id: string;
+  author_id: string;
+  author_name: string;
+  kind: RequestKind;
+  category: RequestCategory;
+  title: string;
+  details: string | null;
+  when_text: string | null;
+  status: 'abierta' | 'resuelta' | 'cerrada';
+  created_at: string;
+};
+export type NewRequest = Pick<NeighbourRequest, 'kind' | 'category' | 'title' | 'details' | 'when_text'>;
+export type Conversation = {
+  id: string;
+  request_id: string | null;
+  request_title: string | null;
+  other_id: string;
+  other_name: string;
+  i_started: boolean;
+  status: 'pendiente' | 'aceptada' | 'rechazada' | 'bloqueada';
+  last_at: string;
+  last_text: string | null;
+};
+export type ChatMessage = { id: string; sender_id: string; body: string; created_at: string };
+export type Level = { favors_given: number; hours_given: number; hours_received: number; level: number; next_at: number };
+export type ReportReason = 'acoso' | 'estafa' | 'cobro' | 'inapropiado' | 'otro';
+
 // Todo lo que la app necesita de los datos. Hay dos implementaciones:
 // una de demostración en memoria y otra contra Supabase.
 export interface Repo {
@@ -182,6 +215,18 @@ export interface Repo {
   joinEvent(id: string): Promise<void>;
   leaveEvent(id: string): Promise<void>;
   cancelEvent(id: string): Promise<void>;
+  // vecinos (Fase 2)
+  requests(): Promise<NeighbourRequest[]>;
+  createRequest(r: NewRequest): Promise<void>;
+  offerHelp(requestId: string, message: string): Promise<string>;
+  closeRequest(requestId: string, helperId: string | null, hours: number): Promise<void>;
+  conversations(): Promise<Conversation[]>;
+  answerConversation(id: string, accept: boolean): Promise<void>;
+  messages(conversationId: string): Promise<ChatMessage[]>;
+  sendMessage(conversationId: string, body: string): Promise<void>;
+  blockUser(userId: string): Promise<void>;
+  report(userId: string, reason: ReportReason, details: string, conversationId?: string): Promise<void>;
+  myLevel(): Promise<Level>;
   // vecino
   shops(): Promise<Shop[]>;
   liveOffers(): Promise<Offer[]>;

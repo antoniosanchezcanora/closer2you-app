@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { BarrioEvent, Me, Menu, MenuReservation, NewOffer, Notice, Offer, Repo, Reservation, ReservationStatus, Shop } from './types';
+import type { BarrioEvent, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Repo, Reservation, ReservationStatus, Shop } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
@@ -46,6 +46,16 @@ function demoRepo(): Repo {
     { id: 'n1', kind: 'verificado', title: 'Ya eres vecino verificado', body: 'Te ha verificado Frutería Carmen.', created_at: at(-1440), read_at: at(-1400) },
     { id: 'n2', kind: 'reserva', title: 'Tu reserva va en camino', body: 'Frutería Carmen · Manzanas reineta', created_at: at(-20), read_at: null },
   ];
+  const reqs: NeighbourRequest[] = [
+    { id: 'q1', author_id: 'u4', author_name: 'Ana', kind: 'pido', category: 'compra', title: 'Necesito que alguien me suba la compra el jueves por la mañana.', details: 'Son dos bolsas, vivo en un cuarto sin ascensor.', when_text: 'Jueves', status: 'abierta', created_at: at(-60) },
+    { id: 'q2', author_id: 'u5', author_name: 'Lucía', kind: 'pido', category: 'recado', title: 'Busco a alguien que me riegue las plantas del 4 al 10 de noviembre.', details: null, when_text: 'Noviembre', status: 'abierta', created_at: at(-180) },
+    { id: 'q3', author_id: 'u2', author_name: 'Miguel', kind: 'ofrezco', category: 'prestamo', title: 'Presto un taladro este fin de semana.', details: null, when_text: 'Este finde', status: 'abierta', created_at: at(-1500) },
+  ];
+  const convs: Conversation[] = [
+    { id: 'c1', request_id: 'q9', request_title: 'Paseo al perro el sábado', other_id: 'u6', other_name: 'Dani', i_started: false, status: 'pendiente', last_at: at(-15), last_text: 'Puedo ayudarte, lo saco a las 10.' },
+  ];
+  const msgs: Record<string, ChatMessage[]> = { c1: [{ id: 'mm1', sender_id: 'u6', body: 'Puedo ayudarte, lo saco a las 10.', created_at: at(-15) }] };
+  const level = { favors_given: 4, hours_given: 4, hours_received: 2, level: 2, next_at: 6 };
   const days = (d: number, h: number, m = 0) => { const x = new Date(); x.setDate(x.getDate() + d); x.setHours(h, m, 0, 0); return x.toISOString(); };
   const events: BarrioEvent[] = [
     { id: 'e1', creator_id: 'u2', shop_id: null, title: 'Partido nocturno de fútbol 7', category: 'deporte', starts_at: days(2, 21, 30), place: 'Pista del parque', capacity: 14, price_text: 'Gratis', description: 'Nivel de barrio, se juega para pasarlo bien. Trae ropa oscura y clara.', kids: false, active: true, going: 11, me_going: false },
@@ -69,6 +79,23 @@ function demoRepo(): Repo {
     async joinEvent(id) { await wait(); const e = events.find((x) => x.id === id)!; if (e.capacity && e.going >= e.capacity) throw new Error('Ya no quedan plazas'); e.going += 1; e.me_going = true; },
     async leaveEvent(id) { await wait(); const e = events.find((x) => x.id === id)!; e.going -= 1; e.me_going = false; },
     async cancelEvent(id) { await wait(); const e = events.find((x) => x.id === id); if (e) e.active = false; },
+    async requests() { await wait(); return reqs.filter((r) => r.status === 'abierta' || r.author_id === me.id).map((r) => ({ ...r })); },
+    async createRequest(r) { await wait(); reqs.unshift({ ...r, id: 'q' + Date.now(), author_id: me.id, author_name: me.name, status: 'abierta', created_at: new Date().toISOString() }); },
+    async offerHelp(requestId, message) {
+      await wait();
+      const r = reqs.find((x) => x.id === requestId)!;
+      const c: Conversation = { id: 'c' + Date.now(), request_id: r.id, request_title: r.title, other_id: r.author_id, other_name: r.author_name, i_started: true, status: 'pendiente', last_at: new Date().toISOString(), last_text: message || 'Puedo ayudarte.' };
+      convs.unshift(c); msgs[c.id] = [{ id: 'm' + Date.now(), sender_id: me.id, body: c.last_text!, created_at: c.last_at }];
+      return c.id;
+    },
+    async closeRequest(id) { await wait(); const r = reqs.find((x) => x.id === id); if (r) r.status = 'resuelta'; level.favors_given += 0; },
+    async conversations() { await wait(); return convs.map((c) => ({ ...c })); },
+    async answerConversation(id, accept) { await wait(); const c = convs.find((x) => x.id === id); if (c) c.status = accept ? 'aceptada' : 'rechazada'; },
+    async messages(id) { await wait(); return (msgs[id] ?? []).map((m) => ({ ...m })); },
+    async sendMessage(id, body) { await wait(); (msgs[id] ??= []).push({ id: 'm' + Date.now(), sender_id: me.id, body, created_at: new Date().toISOString() }); const c = convs.find((x) => x.id === id); if (c) { c.last_text = body; c.last_at = new Date().toISOString(); } },
+    async blockUser(userId) { await wait(); convs.filter((c) => c.other_id === userId).forEach((c) => { c.status = 'bloqueada'; }); },
+    async report() { await wait(); },
+    async myLevel() { await wait(); return { ...level }; },
     async shops() { await wait(); return shops.map((s) => ({ ...s })); },
     async liveOffers() { await wait(); return offers.filter((o) => isLive(o) && !muted.has(o.shop_id)).map((o) => ({ ...o })); },
     async liveMenus() { await wait(); return menus.filter((m) => m.active && m.qty_left > 0 && !muted.has(m.shop_id)).map((m) => ({ ...m })); },
@@ -230,6 +257,34 @@ function liveRepo(): Repo {
     async joinEvent(eventId) { ok(await sb.from('event_attendees').insert({ event_id: eventId, user_id: await uid() })); },
     async leaveEvent(eventId) { ok(await sb.from('event_attendees').delete().eq('event_id', eventId).eq('user_id', await uid())); },
     async cancelEvent(eventId) { ok(await sb.from('events').update({ active: false }).eq('id', eventId)); },
+    async requests() {
+      const rows = ok(await sb.from('requests').select('id, author_id, kind, category, title, details, when_text, status, created_at, profiles(display_name)').order('created_at', { ascending: false }).limit(60)) as any[];
+      return rows.map((r) => ({ ...r, author_name: r.profiles?.display_name ?? 'Vecino' })) as NeighbourRequest[];
+    },
+    async createRequest(r) { ok(await sb.from('requests').insert({ ...r, author_id: await uid() })); },
+    async offerHelp(requestId, message) { return ok(await sb.rpc('offer_help', { p_request: requestId, p_message: message })) as string; },
+    async closeRequest(requestId, helperId, hours) { ok(await sb.rpc('resolve_request', { p_request: requestId, p_helper: helperId, p_hours: hours })); },
+    async conversations() {
+      const id = await uid();
+      const rows = ok(await sb.from('conversations').select('id, request_id, starter_id, other_id, status, last_at, requests(title), starter:profiles!conversations_starter_id_fkey(display_name), other:profiles!conversations_other_id_fkey(display_name)').order('last_at', { ascending: false }).limit(50)) as any[];
+      const ids = rows.map((r) => r.id);
+      const last = ids.length ? (ok(await sb.from('messages').select('conversation_id, body, created_at').in('conversation_id', ids).order('created_at', { ascending: false }).limit(200)) as any[]) : [];
+      return rows.map((r) => {
+        const mine = r.starter_id === id;
+        return { id: r.id, request_id: r.request_id, request_title: r.requests?.title ?? null, other_id: mine ? r.other_id : r.starter_id, other_name: (mine ? r.other?.display_name : r.starter?.display_name) ?? 'Vecino',
+          i_started: mine, status: r.status, last_at: r.last_at, last_text: last.find((m) => m.conversation_id === r.id)?.body ?? null } as Conversation;
+      });
+    },
+    async answerConversation(cid, accept) { ok(await sb.rpc('answer_conversation', { p_conversation: cid, p_accept: accept })); },
+    async messages(cid) { return ok(await sb.from('messages').select('id, sender_id, body, created_at').eq('conversation_id', cid).order('created_at').limit(300)) as ChatMessage[]; },
+    async sendMessage(cid, body) { ok(await sb.from('messages').insert({ conversation_id: cid, sender_id: await uid(), body: body.trim() })); },
+    async blockUser(userId) { ok(await sb.rpc('block_user', { p_user: userId })); },
+    async report(userId, reason, details, conversationId) { ok(await sb.from('reports').insert({ reporter_id: await uid(), reported_id: userId, reason, details: details.trim() || null, conversation_id: conversationId ?? null })); },
+    async myLevel() {
+      const rows = ok(await sb.rpc('my_level')) as any[];
+      const r = rows?.[0] ?? { favors_given: 0, hours_given: 0, hours_received: 0, level: 1, next_at: 3 };
+      return { favors_given: Number(r.favors_given), hours_given: Number(r.hours_given), hours_received: Number(r.hours_received), level: Number(r.level), next_at: Number(r.next_at) };
+    },
     async shops() {
       return ok(await sb.from('shops').select(SHOP_COLS).eq('active', true).order('name')) as Shop[];
     },
