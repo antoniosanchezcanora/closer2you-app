@@ -217,6 +217,7 @@ export type Person = {
 };
 export type CareAlert = { id: string; user_id: string; user_name: string; status: 'abierta' | 'atendida' | 'cerrada'; responder_name: string | null; created_at: string; my_answer: 'voy' | 'no_puedo' | null };
 export type Walk = { id: string; user_id: string; user_name: string; status: 'activa' | 'llegado' | 'cancelada'; eta_at: string; lat: number | null; lng: number | null; pos_at: string | null; created_at: string; ended_at: string | null };
+export type PresencePerson = { other_id: string; name: string; online: boolean; awake: boolean };
 export type MyPresence = { last_ok_at: string | null; awake_until: string | null };
 
 // Profesionales (Fase 2)
@@ -294,6 +295,9 @@ export interface Repo {
   answerInvite(linkId: string, accept: boolean): Promise<void>;
   removePerson(userId: string): Promise<void>;
   setPerm(userId: string, vuelvo: boolean, cuidado: boolean): Promise<void>;
+  touchPresence(): Promise<void>;
+  peoplePresence(): Promise<PresencePerson[]>;
+  openDirectChat(userId: string): Promise<Conversation>;
   // Cuidarnos
   myPresence(): Promise<MyPresence>;
   imOk(): Promise<void>;

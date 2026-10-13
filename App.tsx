@@ -1,12 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { Button, Segment, T } from './src/components/ui';
 import { repo } from './src/lib/repo';
 import { supabase } from './src/lib/supabase';
-import type { Me, Shop } from './src/lib/types';
+import type { Conversation, Me, Shop } from './src/lib/types';
 import AltaTienda from './src/screens/AltaTienda';
 import Avisos from './src/screens/Avisos';
 import Login from './src/screens/Login';
@@ -33,6 +33,7 @@ export default function App() {
   const [openShop, setOpenShop] = useState<string | null>(null);
   const [publish, setPublish] = useState<'menu' | 'oferta'>('menu');
   const [donde, setDonde] = useState<'comercios' | 'pros'>('comercios');
+  const [chatConv, setChatConv] = useState<Conversation | null>(null);
   const [shopMode, setShopMode] = useState(false);
   const [unread, setUnread] = useState(0);
   const hasShop = !!myShop;
@@ -73,6 +74,21 @@ export default function App() {
     return () => { supabase?.removeChannel(ch); };
   }, [signedIn, refreshUnread]);
 
+  // Mientras Stoop está abierto, tu gente te ve «conectado» (solo quien está en tu círculo).
+  useEffect(() => {
+    if (!signedIn || !fase2) return;
+    const beat = () => { if (AppState.currentState === 'active') repo.touchPresence().catch(() => {}); };
+    beat();
+    const t = setInterval(beat, 60000);
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') beat(); });
+    return () => { clearInterval(t); sub.remove(); };
+  }, [signedIn, fase2]);
+
+  const openChatWith = async (userId: string) => {
+    try { setChatConv(await repo.openDirectChat(userId)); setTab('vecinos'); }
+    catch (e: any) { Alert.alert('No se ha podido', e.message); }
+  };
+
   const signOut = () => { repo.signOut().catch((e: any) => Alert.alert('Error', e.message)); };
   const go = (t: Tab) => { setTab(t); if (t === 'tiendas') setOpenShop(null); };
 
@@ -88,7 +104,7 @@ export default function App() {
         ) : (
           <>
             <View style={{ flex: 1 }}>
-              {!shopMode && tab === 'calle' && <VecinoHoy me={me ?? null} myShop={myShop} unread={unread} onVerified={loadMe} onAvisos={() => go('avisos')} onOpenShop={(id) => { setOpenShop(id); setTab('tiendas'); }} />}
+              {!shopMode && tab === 'calle' && <VecinoHoy me={me ?? null} myShop={myShop} unread={unread} onChatWith={openChatWith} onVerified={loadMe} onAvisos={() => go('avisos')} onOpenShop={(id) => { setOpenShop(id); setTab('tiendas'); }} />}
               {!shopMode && tab === 'tiendas' && (
                 fase2 && !openShop ? (
                   <View style={{ flex: 1 }}>
@@ -99,7 +115,7 @@ export default function App() {
                   </View>
                 ) : <Tiendas verified={!!me?.verified} openShopId={openShop} onOpenShop={setOpenShop} onCloseShop={() => setOpenShop(null)} />
               )}
-              {!shopMode && tab === 'vecinos' && <Vecinos me={me ?? null} />}
+              {!shopMode && tab === 'vecinos' && <Vecinos me={me ?? null} openConv={chatConv} onConvShown={() => setChatConv(null)} />}
               {!shopMode && tab === 'perfil' && <Perfil me={me ?? null} shop={myShop} unread={unread} onAvisos={() => go('avisos')} onShopMode={() => { setShopMode(true); setTab('tienda'); }} onServicio={fase2 ? () => setTab('servicio') : undefined} onAlta={() => setTab('alta')} onSignOut={signOut} />}
               {!shopMode && tab === 'alta' && <AltaTienda onBack={() => setTab('perfil')} onDone={() => { loadMe(); setTab('perfil'); }} />}
               {!shopMode && tab === 'servicio' && <MiServicio onBack={() => setTab('perfil')} />}

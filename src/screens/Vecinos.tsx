@@ -19,9 +19,10 @@ const ago = (iso: string) => {
 };
 
 // Pestaña Vecinos. Fase 2: solo cuentas de prueba hasta que pase la revisión de seguridad.
-export default function Vecinos({ me }: { me: Me | null }) {
-  const [seg, setSeg] = useState<'tablon' | 'mensajes' | 'mio' | 'gente'>('tablon');
-  const [chat, setChat] = useState<Conversation | null>(null);
+export default function Vecinos({ me, openConv, onConvShown }: { me: Me | null; openConv?: Conversation | null; onConvShown?: () => void }) {
+  const [seg, setSeg] = useState<'tablon' | 'mensajes' | 'mio' | 'gente'>(openConv ? 'gente' : 'tablon');
+  const [chat, setChat] = useState<Conversation | null>(openConv ?? null);
+  useEffect(() => { if (openConv) { Promise.resolve().then(() => { setChat(openConv); onConvShown?.(); }); } }, [openConv, onConvShown]);
 
   if (!me?.fase2 || !me.verified) {
     return (
@@ -48,7 +49,7 @@ export default function Vecinos({ me }: { me: Me | null }) {
       </View>
       {seg === 'tablon' && <Tablon me={me} onOpenChat={setChat} />}
       {seg === 'mensajes' && <Mensajes onOpen={setChat} />}
-      {seg === 'gente' && <MiGente me={me} />}
+      {seg === 'gente' && <MiGente me={me} onOpenChat={setChat} />}
       {seg === 'mio' && <LoMio me={me} />}
     </View>
   );
@@ -172,7 +173,7 @@ function Mensajes({ onOpen }: { onOpen: (c: Conversation) => void }) {
       {pendientes.length > 0 && <Label>Quieren ayudarte</Label>}
       {pendientes.map((c) => (
         <Card key={c.id} tint={colors.blueSoft} style={{ gap: 8 }}>
-          <View style={st.row}><Initial name={c.other_name} size={40} /><View style={{ flex: 1 }}><Text style={T.strong}>{c.other_name}</Text><Text style={T.small}>{c.request_title}</Text></View></View>
+          <View style={st.row}><Initial name={c.other_name} size={40} /><View style={{ flex: 1 }}><Text style={T.strong}>{c.other_name}</Text><Text style={T.small}>{c.request_title ?? 'Tu gente'}</Text></View></View>
           {!!c.last_text && <Text style={T.body}>«{c.last_text}»</Text>}
           <View style={st.row}>
             <Button small label="Aceptar y hablar" tone="blue" onPress={() => answer(c, true)} style={{ flex: 1 }} />
@@ -188,7 +189,7 @@ function Mensajes({ onOpen }: { onOpen: (c: Conversation) => void }) {
               <Initial name={c.other_name} size={42} />
               <View style={{ flex: 1 }}>
                 <Text style={T.strong}>{c.other_name}</Text>
-                <Text style={T.small} numberOfLines={1}>{c.status === 'pendiente' ? 'Esperando a que acepte' : c.status === 'bloqueada' ? 'Bloqueada' : c.last_text ?? c.request_title}</Text>
+                <Text style={T.small} numberOfLines={1}>{c.status === 'pendiente' ? 'Esperando a que acepte' : c.status === 'bloqueada' ? 'Bloqueada' : c.last_text ?? c.request_title ?? 'Tu gente'}</Text>
               </View>
               <Text style={T.small}>{hhmm(c.last_at)}</Text>
             </Pressable>
@@ -241,7 +242,7 @@ function Chat({ me, conv, onBack }: { me: Me; conv: Conversation; onBack: () => 
       <View style={st.chatHead}>
         <Button small label="‹" tone="soft" onPress={onBack} />
         <Initial name={conv.other_name} size={36} />
-        <View style={{ flex: 1 }}><Text style={T.strong}>{conv.other_name}</Text><Text style={T.small} numberOfLines={1}>{conv.request_title ?? 'Vecino verificado'}</Text></View>
+        <View style={{ flex: 1 }}><Text style={T.strong}>{conv.other_name}</Text><Text style={T.small} numberOfLines={1}>{conv.request_title ?? 'Tu gente'}</Text></View>
         <Button small label="···" tone="soft" onPress={menu} />
       </View>
       {reporting ? (

@@ -1,7 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
-import type { Appointment, ShopRequestStatus, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
+import type { Appointment, PresencePerson, ShopRequestStatus, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
 
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
@@ -142,6 +142,18 @@ function demoRepo(): Repo {
     async removePerson(userId) { await wait(); const i = people.findIndex((x) => x.other_id === userId); if (i >= 0) people.splice(i, 1); },
     async setPerm(userId, vuelvo, cuidado) { await wait(); const x = people.find((p) => p.other_id === userId); if (x) { x.i_share_vuelvo = vuelvo; x.i_share_cuidado = cuidado; } },
     async myPresence() { await wait(); return { ...presence }; },
+    async touchPresence() { /* en la demo no hace falta */ },
+    async peoplePresence() { await wait(); return [{ other_id: 'u5', name: 'Lucía', online: true, awake: true }, { other_id: 'u7', name: 'Marta', online: true, awake: false }] as PresencePerson[]; },
+    async openDirectChat(userId) {
+      await wait();
+      let c = convs.find((x) => x.other_id === userId && !x.request_id);
+      if (!c) {
+        const p = people.find((x) => x.other_id === userId);
+        c = { id: 'c' + Date.now(), request_id: null, request_title: null, other_id: userId, other_name: p?.name ?? 'Vecino', i_started: true, status: 'aceptada', last_at: new Date().toISOString(), last_text: null };
+        convs.unshift(c); msgs[c.id] = [];
+      }
+      return { ...c };
+    },
     async imOk() { await wait(); presence.last_ok_at = new Date().toISOString(); },
     async setAwake(minutes) { await wait(); presence.awake_until = minutes > 0 ? new Date(Date.now() + minutes * 60000).toISOString() : null; },
     async askHelp() { await wait(); if (!alerts.some((a) => a.user_id === me.id && a.status !== 'cerrada')) alerts.unshift({ id: 'a' + Date.now(), user_id: me.id, user_name: me.name, status: 'abierta', responder_name: null, created_at: new Date().toISOString(), my_answer: null }); },
@@ -371,6 +383,14 @@ function liveRepo(): Repo {
     async answerInvite(linkId, accept) { ok(await sb.rpc('answer_trust', { p_link: linkId, p_accept: accept })); },
     async removePerson(userId) { ok(await sb.rpc('remove_trust', { p_user: userId })); },
     async setPerm(userId, vuelvo, cuidado) { ok(await sb.rpc('set_trust_perm', { p_user: userId, p_vuelvo: vuelvo, p_cuidado: cuidado })); },
+    async touchPresence() { await sb.rpc('touch_presence'); },
+    async peoplePresence() { return ((ok(await sb.rpc('people_presence')) as any[]) ?? []) as PresencePerson[]; },
+    async openDirectChat(userId) {
+      const cid = ok(await sb.rpc('open_direct_chat', { p_user: userId })) as string;
+      const c = (await repo.conversations()).find((x) => x.id === cid);
+      if (!c) throw new Error('No se ha podido abrir el chat');
+      return c;
+    },
     async myPresence() {
       const rows = ok(await sb.from('presence').select('last_ok_at, awake_until').eq('user_id', await uid()).limit(1)) as any[];
       return rows[0] ?? { last_ok_at: null, awake_until: null };

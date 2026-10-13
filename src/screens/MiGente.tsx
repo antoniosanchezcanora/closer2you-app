@@ -5,7 +5,7 @@ import { Badge, Button, Card, Chip, Initial, Label, Note, T } from '../component
 import { WalkMap } from '../components/WalkMap';
 import { repo } from '../lib/repo';
 import { supabase } from '../lib/supabase';
-import type { CareAlert, Me, MyPresence, Person, Walk } from '../lib/types';
+import type { CareAlert, Conversation, Me, MyPresence, Person, PresencePerson, Walk } from '../lib/types';
 import { colorFor, colors, hhmm } from '../theme';
 
 // Fuera del render: la hora actual (la regla de pureza de React no deja llamar a Date.now() dentro).
@@ -28,12 +28,13 @@ function Btn112({ big }: { big?: boolean }) {
 }
 
 // Vecinos > Mi gente: el círculo de confianza y todo lo de cuidarnos.
-export default function MiGente({ me }: { me: Me }) {
+export default function MiGente({ me, onOpenChat }: { me: Me; onOpenChat: (c: Conversation) => void }) {
   const [people, setPeople] = useState<Person[]>([]);
   const [alerts, setAlerts] = useState<CareAlert[]>([]);
   const [walks, setWalks] = useState<Walk[]>([]);
   const [presence, setPresence] = useState<MyPresence>({ last_ok_at: null, awake_until: null });
   const [loading, setLoading] = useState(true);
+  const [online, setOnline] = useState<PresencePerson[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [goingHome, setGoingHome] = useState(false);
@@ -63,6 +64,7 @@ export default function MiGente({ me }: { me: Me }) {
     try {
       const [p, a, w, pr] = await Promise.all([repo.people(), repo.careAlerts(), repo.walks(), repo.myPresence()]);
       setPeople(p); setAlerts(a); setPresence(pr); applyWalks(w);
+      repo.peoplePresence().then(setOnline).catch(() => {});
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
     } finally {
@@ -224,6 +226,7 @@ export default function MiGente({ me }: { me: Me }) {
                   <Text style={T.strong}>{p.name}</Text>
                   <Text style={T.small}>{p.neighbour ? 'Vecino verificado' : 'Amigo de otro barrio'}</Text>
                   <View style={st.row}>
+                    {online.some((o) => o.other_id === p.other_id && o.online) && <Badge label="Conectado" color={colors.green} soft={colors.greenSoft} />}
                     {p.awake && <Badge label="Despierto" color={colors.blue} soft={colors.blueSoft} />}
                     {isToday(p.last_ok_at) && <Badge label={`Bien hoy, ${hhmm(p.last_ok_at!)}`} color={colors.green} soft={colors.greenSoft} />}
                   </View>
@@ -232,6 +235,7 @@ export default function MiGente({ me }: { me: Me }) {
               </Pressable>
               {open === p.other_id && (
                 <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
+                  <Button label={`Escribir a ${p.name}`} tone="blue" onPress={async () => { try { onOpenChat(await repo.openDirectChat(p.other_id)); } catch (e: any) { Alert.alert('No se ha podido', e.message); } }} />
                   <Text style={T.small}>Lo que compartes con {p.name}:</Text>
                   <Toggle label="Puede seguir mi vuelta a casa" on={p.i_share_vuelvo} onPress={() => run(() => repo.setPerm(p.other_id, !p.i_share_vuelvo, p.i_share_cuidado))} />
                   <Toggle label="Recibe mis avisos de ayuda y ve mi «Estoy bien»" on={p.i_share_cuidado} onPress={() => run(() => repo.setPerm(p.other_id, p.i_share_vuelvo, !p.i_share_cuidado))} />

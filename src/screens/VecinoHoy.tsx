@@ -6,7 +6,7 @@ import { ReserveSheet, ReserveTarget } from '../components/ReserveSheet';
 import { Badge, Button, Card, Initial, Label, Note, Segment, T } from '../components/ui';
 import Agenda from './Agenda';
 import { repo } from '../lib/repo';
-import type { Me, Menu, MenuReservation, Offer, Reservation, ReservationStatus, Shop } from '../lib/types';
+import type { Me, Menu, MenuReservation, Offer, PresencePerson, Reservation, ReservationStatus, Shop } from '../lib/types';
 import { colors, eur, hhmm } from '../theme';
 
 const STATUS: Record<ReservationStatus, { text: string; color: string; soft: string }> = {
@@ -28,10 +28,11 @@ export function offerBadge(o: Offer) {
 
 type Group = { shopId: string; shopName?: string; latest: string; offers: Offer[]; menu?: Menu };
 
-export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, onOpenShop }: { me: Me | null; myShop: Shop | null; unread: number; onVerified: () => void; onAvisos: () => void; onOpenShop: (shopId: string) => void }) {
+export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, onOpenShop, onChatWith }: { me: Me | null; myShop: Shop | null; unread: number; onVerified: () => void; onAvisos: () => void; onOpenShop: (shopId: string) => void; onChatWith: (userId: string) => void }) {
   const [seg, setSeg] = useState<'barrio' | 'plaza' | 'ciudad' | 'agenda'>('barrio');
   const [follows, setFollows] = useState<string[]>([]);
   const [discover, setDiscover] = useState(false);
+  const [lit, setLit] = useState<PresencePerson[]>([]);
   const { width } = useWindowDimensions();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -48,6 +49,7 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
     try {
       const [o, m, s, r, mr, f] = await Promise.all([repo.liveOffers(), repo.liveMenus(), repo.shops(), repo.myReservations(), repo.myMenuReservations(), repo.follows().catch(() => [] as string[])]);
       setOffers(o); setMenus(m); setShops(s); setMine(r); setMineMenus(mr); setFollows(f);
+      repo.peoplePresence().then((x) => setLit(x.filter((y) => y.online || y.awake))).catch(() => setLit([]));
     } catch (e: any) {
       Alert.alert('No se ha podido cargar', e.message);
     } finally {
@@ -59,6 +61,20 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
   useEffect(() => { Promise.resolve().then(load); }, [load, verified]);
 
   const refresh = () => { load(); onVerified(); };
+  // Las ventanas se refrescan solas cada minuto mientras miras la calle.
+  useEffect(() => {
+    if (!me?.fase2) return;
+    const t = setInterval(() => { repo.peoplePresence().then((x) => setLit(x.filter((y) => y.online || y.awake))).catch(() => {}); }, 60000);
+    return () => clearInterval(t);
+  }, [me?.fase2]);
+  const pressWindow = (id: string) => {
+    const p = lit.find((x) => x.other_id === id);
+    if (!p) return;
+    Alert.alert(p.name, p.awake ? 'Está despierto y se puede hablar.' : 'Tiene Stoop abierto ahora mismo.', [
+      { text: 'Cerrar', style: 'cancel' },
+      { text: 'Escribir', onPress: () => onChatWith(id) },
+    ]);
+  };
   const shopById = (id: string) => shops.find((s) => s.id === id);
 
   const myBarrio = me?.barrio ?? 'Palos de la Frontera';
@@ -120,11 +136,17 @@ export default function VecinoHoy({ me, myShop, unread, onVerified, onAvisos, on
         </View>
 
         <View style={st.street}>
-          <Calle width={width} />
+          <Calle width={width} lit={lit.map((p) => ({ id: p.other_id, name: p.name, awake: p.awake, online: p.online }))} onPressWindow={pressWindow} />
           {verified && groups.length > 0 && (
             <View style={st.streetPill}><Text style={st.streetPillText}>{groups.filter((g) => inBarrio(g.shopId)).length} {groups.filter((g) => inBarrio(g.shopId)).length === 1 ? 'tienda ha publicado' : 'tiendas han publicado'} hoy en el barrio</Text></View>
           )}
         </View>
+        {lit.length > 0 && (
+          <Pressable accessibilityRole="button" onPress={() => (lit.length === 1 ? pressWindow(lit[0].other_id) : Alert.alert('Con la luz encendida', '¿A quién quieres escribir?', [...lit.slice(0, 4).map((p) => ({ text: p.name, onPress: () => onChatWith(p.other_id) })), { text: 'Cerrar', style: 'cancel' as const }]))} style={st.litRow}>
+            <View style={st.litDot} />
+            <Text style={[T.small, { color: colors.ink, flex: 1 }]}>{lit.length === 1 ? `${lit[0].name} tiene la luz encendida` : `${lit.map((p) => p.name).join(', ')} tienen la luz encendida`}. Toca su ventana para escribirle.</Text>
+          </Pressable>
+        )}
 
         {!verified && (
           <Card tint={colors.greenSoft} style={{ gap: 10 }}>
@@ -286,6 +308,8 @@ const st = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   price: { fontSize: 19, fontWeight: '700', color: colors.ink },
   mute: { alignSelf: 'flex-end', fontSize: 13, color: colors.faint, paddingVertical: 8 },
+  litRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF6DE', borderRadius: 12, padding: 10, marginTop: 24 },
+  litDot: { width: 12, height: 12, borderRadius: 3, backgroundColor: '#FFC24A' },
   followRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   done: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#C9CDD3', borderRadius: 16, padding: 20, alignItems: 'center', gap: 6, marginTop: 4 },
   bell: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
