@@ -3,6 +3,9 @@ import { supabase } from './supabase';
 import { MAX_OFERTAS_ACTIVAS, MAX_OFERTAS_DIA } from './types';
 import type { Appointment, DiscreetAlert, IdCheck, PendingIdCheck, AwakeSchedule, ChatGroup, GroupMessage, PresencePerson, ShopMessage, ShopRequestStatus, ShopThread, TableBooking, BarrioEvent, CareAlert, ChatMessage, Conversation, Me, Menu, MenuReservation, NeighbourRequest, NewOffer, Notice, Offer, Person, Pro, Repo, Reservation, ReservationStatus, Review, Shop, Walk } from './types';
 
+// Solo para la demostración: una factura dibujada, claramente falsa.
+const DEMO_FACTURA = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='800'><rect width='600' height='800' fill='white'/><rect width='600' height='90' fill='%232E4A73'/><text x='30' y='58' font-family='Arial' font-size='34' font-weight='700' fill='white'>FACTURA DE PRUEBA</text><text x='30' y='170' font-family='Arial' font-size='24' fill='%231E1A3A'>Titular: Carmen</text><text x='30' y='215' font-family='Arial' font-size='24' fill='%231E1A3A'>Calle General Lacy, Madrid</text><text x='30' y='260' font-family='Arial' font-size='24' fill='%231E1A3A'>Periodo: septiembre 2026</text><text x='30' y='360' font-family='Arial' font-size='22' fill='%23B0436A'>Documento falso de demostración</text></svg>";
+
 const madridDay = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
 // Fecha de hoy en Madrid como AAAA-MM-DD (la columna "day" de los menús).
 export const madridISODate = () => {
@@ -86,6 +89,7 @@ function demoRepo(): Repo {
   let selected = 's1';
   let discreet: string[] = ['u7'];
   let idCheck: IdCheck | null = null;
+  let pendingChecks: PendingIdCheck[] = [{ id: 'ic1', user_id: 'u9', name: 'Carmen', method: 'factura', path: 'demo/factura.jpg', created_at: at(-25) }];
   const discreetInbox: DiscreetAlert[] = [];
   const people: Person[] = [
     { link_id: 'l1', other_id: 'u5', name: 'Lucía', status: 'aceptada', i_sent: true, neighbour: true, i_share_vuelvo: true, i_share_cuidado: true, they_share_vuelvo: true, they_share_cuidado: true, awake: true, last_ok_at: null },
@@ -212,10 +216,10 @@ function demoRepo(): Repo {
     async myIdCheck() { await wait(); return idCheck ? { ...idCheck } : null; },
     async sendIdCheck(method) { await wait(); idCheck = { id: 'ic' + Date.now(), method, status: 'pendiente', reason: null, created_at: new Date().toISOString() }; },
     async cancelIdCheck() { await wait(); if (idCheck) idCheck.status = 'retirada'; },
-    async isAdmin() { await wait(); return false; },
-    async pendingIdChecks() { await wait(); return []; },
-    async idPhotoUrl() { await wait(); return ''; },
-    async reviewIdCheck() { await wait(); },
+    async isAdmin() { await wait(); return true; },
+    async pendingIdChecks() { await wait(); return pendingChecks.map((c) => ({ ...c })); },
+    async idPhotoUrl() { await wait(); return DEMO_FACTURA; },
+    async reviewIdCheck(id) { await wait(); pendingChecks = pendingChecks.filter((c) => c.id !== id); },
     async myDiscreetContacts() { await wait(); return discreet.map((id) => ({ id, name: people.find((p) => p.other_id === id)?.name ?? 'Vecino' })); },
     async setDiscreetContacts(ids) { await wait(); if (ids.length > 2) throw new Error('Elige como mucho a dos personas'); discreet = [...new Set(ids)]; },
     async discreetForMe() { await wait(); return [{ id: 'u5', name: 'Lucía' }]; },
